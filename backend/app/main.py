@@ -1,0 +1,39 @@
+"""Poseidon — FastAPI application entrypoint."""
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
+from app.gateway.web_adapter import router as web_router
+
+
+app = FastAPI(
+    title="Poseidon Agent",
+    description="Persistent-memory personal agent",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(web_router)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "model": settings.poseidon_model}
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host=settings.poseidon_host,
+        port=settings.poseidon_port,
+        reload=True,
+    )
