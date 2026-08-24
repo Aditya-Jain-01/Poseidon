@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.orchestration.graph import run_agent
@@ -30,8 +31,8 @@ class ChatResponse(BaseModel):
 router = APIRouter()
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
+@router.post("/chat")
+async def chat(req: ChatRequest):
     event = InboundEvent(
         user_id=req.user_id,
         channel="web",
@@ -41,6 +42,12 @@ async def chat(req: ChatRequest) -> ChatResponse:
     )
 
     run_id = str(uuid4())
-    reply = await run_agent(event, run_id)
+    try:
+        reply = await run_agent(event, run_id)
+    except Exception as e:
+        return JSONResponse(
+            status_code=502,
+            content={"error": type(e).__name__, "detail": str(e), "run_id": run_id},
+        )
 
     return ChatResponse(reply=reply, run_id=run_id)
