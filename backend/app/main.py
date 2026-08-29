@@ -6,12 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.gateway.web_adapter import router as web_router
+from app.gateway.memory_adapter import router as memory_router
 
 
 app = FastAPI(
     title="Poseidon Agent",
     description="Persistent-memory personal agent",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(web_router)
+app.include_router(memory_router)
 
 
 @app.get("/health")
