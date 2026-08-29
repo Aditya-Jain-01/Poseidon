@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Topbar from './components/Topbar/Topbar';
 import Overview from './pages/Overview/Overview';
 import Gateway from './pages/Gateway/Gateway';
+import { ChatProvider, useChat } from './context/ChatContext';
+import ChatDock from './components/ChatDock/ChatDock';
 import './App.css';
 
-export function App() {
-  const [isChatOpen, setIsChatOpen] = useState(true);
+function AppLayout() {
+  const { isDockOpen, toggleDock } = useChat();
 
   return (
     <div className="app-layout">
       <Topbar
-        isChatOpen={isChatOpen}
-        onToggleChat={() => setIsChatOpen((prev) => !prev)}
+        isChatOpen={isDockOpen}
+        onToggleChat={toggleDock}
       />
       <div className="app-body">
         <main className="app-content">
@@ -22,14 +24,19 @@ export function App() {
           </Routes>
         </main>
 
-        {/* Chat Dock slot — Person 2 plugs <ChatDock /> here */}
-        <aside className={`app-chat-slot ${isChatOpen ? '' : 'collapsed'}`}>
-          <div style={{ padding: '16px', color: 'var(--muted)', fontSize: '0.85rem' }}>
-            <span className="mono">[ChatDock slot — Person 2]</span>
-          </div>
+        <aside className={`app-chat-slot ${isDockOpen ? '' : 'collapsed'}`}>
+          <ChatDock />
         </aside>
       </div>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ChatProvider>
+      <AppLayout />
+    </ChatProvider>
   );
 }
 

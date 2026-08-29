@@ -1,0 +1,154 @@
+/* ── Message Bubble ── */
+
+.message-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 88%;
+  padding: 0 16px;
+  margin-bottom: 12px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* User messages — right aligned */
+.message-user {
+  align-self: flex-end;
+}
+
+.message-user .message-content {
+  background: var(--accent-soft);
+  border: 1px solid rgba(124, 156, 255, 0.25);
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 14px;
+  color: var(--ink);
+}
+
+.message-user .message-content p {
+  margin: 0;
+  line-height: 1.5;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+/* Agent messages — left aligned */
+.message-agent {
+  align-self: flex-start;
+}
+
+.message-agent .message-content {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 16px 4px;
+  padding: 10px 14px;
+  color: var(--ink);
+}
+
+/* Error styling for failed messages */
+.message-error .message-content {
+  border-color: rgba(255, 107, 122, 0.3);
+  background: rgba(255, 107, 122, 0.06);
+}
+
+/* ── Markdown styles inside agent bubbles ── */
+
+.message-agent .message-content p {
+  margin: 0 0 8px;
+  line-height: 1.55;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.message-agent .message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-agent .message-content strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.message-agent .message-content em {
+  color: var(--muted);
+}
+
+.message-agent .message-content a {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+.message-agent .message-content a:hover {
+  text-decoration: underline;
+}
+
+.message-agent .message-content ul,
+.message-agent .message-content ol {
+  margin: 6px 0;
+  padding-left: 20px;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.message-agent .message-content li {
+  margin-bottom: 3px;
+}
+
+.inline-code {
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.82em;
+  color: var(--accent);
+}
+
+.code-block {
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: #cdd9f0;
+}
+
+.code-block code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* ── Meta line (timestamp + run_id) ── */
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 0;
+}
+
+.message-user .message-meta {
+  justify-content: flex-end;
+}
+
+.message-time {
+  font-size: 0.7rem;
+  color: var(--muted-dim);
+  font-family: var(--font-mono);
+}
+
+.message-run-id {
+  font-size: 0.65rem;
+  color: var(--muted-dim);
+  font-family: var(--font-mono);
+  opacity: 0.6;
+  cursor: help;
+}
+
+.message-run-id:hover {
+  opacity: 1;
+  color: var(--accent);
+}
