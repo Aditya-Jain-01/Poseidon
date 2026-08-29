@@ -10,7 +10,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     # LLM provider
-    openrouter_api_key: str = Field(..., description="OpenRouter API key")
+    openrouter_api_key: str = Field(default="", description="OpenRouter API key")
     poseidon_model: str = Field("google/gemma-4-31b-it:free", description="Model identifier")
     poseidon_base_url: str = Field("https://openrouter.ai/api/v1", description="OpenAI-compatible base URL")
 
@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Memory (used in Sprint 2, configured now)
     poseidon_consolidation_threshold: int = Field(30)
+    poseidon_db_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "state.db")
 
     model_config = {
         "env_file": str(_PROJECT_ROOT / ".env"),

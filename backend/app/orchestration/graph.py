@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage
 
 from app.orchestration.state import AgentState, InboundEvent
 from app.memory.working_memory import assemble, session_store
+from app.memory.episodic_store import episodic_store
 from app.agents import qa_agent
 
 
@@ -54,5 +55,14 @@ async def run_agent(event: InboundEvent, run_id: str) -> str:
 
     # Save to in-session history (lost on restart)
     session_store.append(event.user_id, event.text, reply_text)
+
+    # Persist exchange to episodic memory (survives restart)
+    episodic_store.log_exchange(
+        user_id=event.user_id,
+        human_msg=event.text,
+        ai_msg=reply_text,
+        channel=event.channel,
+        run_id=run_id,
+    )
 
     return reply_text
