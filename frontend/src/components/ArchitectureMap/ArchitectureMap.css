@@ -1,0 +1,153 @@
+.architecture-map-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0;
+  user-select: none;
+}
+
+.architecture-map-svg {
+  width: 100%;
+  max-width: 900px;
+  height: auto;
+  overflow: visible;
+}
+
+/* Common Rectangles */
+.arch-rect {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1.5;
+  transition: all 0.25s ease;
+}
+
+.node-harness {
+  fill: rgba(17, 26, 48, 0.45);
+  stroke: var(--line);
+  stroke-dasharray: 6 4;
+}
+
+.node-inner {
+  fill: var(--panel-2);
+  stroke: var(--line);
+}
+
+.node-gateway {
+  fill: var(--panel);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.node-memory {
+  fill: var(--panel-2);
+  stroke: var(--line-soft);
+}
+
+.node-ops {
+  fill: rgba(13, 21, 38, 0.6);
+  stroke: var(--line-soft);
+}
+
+.node-summarizer {
+  fill: var(--panel-2);
+  stroke: var(--line-soft);
+}
+
+/* Typography in SVG */
+.arch-title {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--ink);
+  letter-spacing: 0.5px;
+}
+
+.node-title-gateway {
+  fill: var(--accent);
+  font-size: 14px;
+}
+
+.arch-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.arch-group-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--muted-dim);
+  letter-spacing: 1px;
+}
+
+.arch-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--teal);
+  letter-spacing: 0.5px;
+}
+
+.arch-guardrail-text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted-dim);
+}
+
+.arch-tool-denied {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--danger);
+}
+
+.arch-strikethrough {
+  stroke: var(--danger);
+  stroke-width: 1.5;
+}
+
+/* Connection Lines */
+.arch-line {
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.line-event {
+  stroke: var(--accent);
+}
+
+.line-reply {
+  stroke: var(--teal);
+}
+
+.line-bidirectional {
+  stroke: var(--muted-dim);
+}
+
+.line-down {
+  stroke: var(--line);
+}
+
+.arch-edge-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.arch-edge-label.accent {
+  fill: var(--accent);
+}
+
+.arch-edge-label.teal {
+  fill: var(--teal);
+}
+
+/* Node Hover and Active States */
+.arch-node:hover .arch-rect {
+  stroke: var(--accent);
+  fill: var(--panel-hover);
+}
+
+.arch-node.active .arch-rect {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 8px rgba(124, 156, 255, 0.35));
+}

@@ -3,3 +3,151 @@
   flex-direction: column;
   gap: 24px;
 }
+
+.gateway-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.gateway-body {
+  padding: 16px 20px 24px;
+}
+
+.gateway-empty-wrap {
+  padding: 40px 0;
+}
+
+.gateway-table-container {
+  overflow-x: auto;
+  margin-top: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.gateway-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.gateway-table thead {
+  background: rgba(6, 10, 20, 0.4);
+  border-bottom: 1px solid var(--line);
+}
+
+.gateway-table th {
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.gateway-row {
+  border-bottom: 1px solid var(--line-soft);
+  transition: background-color 0.15s ease;
+}
+
+.gateway-row:last-child {
+  border-bottom: none;
+}
+
+.gateway-row:hover {
+  background-color: var(--panel-hover);
+}
+
+.gateway-table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+.gateway-cell-time {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.channel-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.channel-badge.web {
+  background: rgba(124, 156, 255, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(124, 156, 255, 0.2);
+}
+
+.direction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.direction-badge.inbound {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid rgba(124, 156, 255, 0.25);
+}
+
+.direction-badge.outbound {
+  background: rgba(79, 214, 196, 0.12);
+  color: var(--teal);
+  border: 1px solid rgba(79, 214, 196, 0.25);
+}
+
+.gateway-cell-content {
+  max-width: 320px;
+  color: var(--ink);
+}
+
+.content-text {
+  display: block;
+}
+
+.gateway-cell-runid {
+  white-space: nowrap;
+}
+
+.run-id-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  transition: all 0.15s ease;
+}
+
+.run-id-pill:hover {
+  background: var(--panel-hover);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.copy-icon {
+  color: var(--muted-dim);
+}
+
+.copy-icon.success {
+  color: var(--teal);
+}

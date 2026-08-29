@@ -3,10 +3,11 @@
 .message-bubble {
   display: flex;
   flex-direction: column;
-  max-width: 88%;
-  padding: 0 16px;
-  margin-bottom: 12px;
+  max-width: 92%;
+  padding: 0 12px;
+  margin-bottom: 14px;
   animation: fadeIn 0.2s ease-out;
+  word-break: break-word;
 }
 
 /* User messages — right aligned */

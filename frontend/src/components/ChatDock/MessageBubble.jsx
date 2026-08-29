@@ -20,14 +20,14 @@ export function MessageBubble({ message }) {
         ) : (
           <Markdown
             components={{
-              // Render code blocks with proper styling
-              code({ inline, className, children, ...props }) {
-                if (inline) {
-                  return <code className="inline-code" {...props}>{children}</code>;
-                }
+              // Custom code styling
+              code({ className = '', children, ...props }) {
+                return <code className={`inline-code ${className}`.trim()} {...props}>{children}</code>;
+              },
+              pre({ children, ...props }) {
                 return (
-                  <pre className="code-block">
-                    <code {...props}>{children}</code>
+                  <pre className="code-block" {...props}>
+                    {children}
                   </pre>
                 );
               },

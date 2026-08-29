@@ -6,26 +6,118 @@
 
 .page-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line-soft);
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .page-title {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--ink);
+  margin-bottom: 4px;
 }
 
 .page-subtitle {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--muted);
-  margin-top: 4px;
 }
 
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+.overview-content {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
+}
+
+.architecture-card {
+  padding: 16px;
+  overflow: hidden;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.telemetry-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 120px;
+}
+
+.telemetry-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.telemetry-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+}
+
+.telemetry-icon.accent {
+  color: var(--accent);
+}
+
+.telemetry-icon.teal {
+  color: var(--teal);
+}
+
+.telemetry-icon.amber {
+  color: var(--amber);
+}
+
+.telemetry-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+}
+
+.telemetry-value-box {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.telemetry-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.telemetry-value.highlight {
+  color: var(--accent);
+}
+
+.telemetry-value-number {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.telemetry-unit {
+  font-size: 0.8rem;
+  color: var(--muted-dim);
+}
+
+.telemetry-footnote {
+  font-size: 0.75rem;
+  color: var(--muted-dim);
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
 }

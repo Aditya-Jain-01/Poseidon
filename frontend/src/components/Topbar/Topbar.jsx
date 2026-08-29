@@ -1,9 +1,19 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { MessageSquare } from 'lucide-react';
+import StatusBadge from '../common/StatusBadge';
+import { useHealth } from '../../context/HealthContext';
 import './Topbar.css';
 
 export function Topbar({ isChatOpen = true, onToggleChat, statusSlot = null }) {
+  const { isConnected, modelName, isLoading } = useHealth();
+
+  const statusLabel = isConnected
+    ? modelName ? modelName.replace('google/', '') : 'Connected'
+    : isLoading ? 'Connecting...' : 'Disconnected';
+
+  const statusType = isLoading ? 'loading' : isConnected ? 'connected' : 'disconnected';
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -31,12 +41,11 @@ export function Topbar({ isChatOpen = true, onToggleChat, statusSlot = null }) {
       </nav>
 
       <div className="topbar-right">
-        {statusSlot ? (
-          statusSlot
-        ) : (
-          <div className="topbar-status-placeholder">
-            {/* Person 3 will inject live HealthContext status */}
-          </div>
+        {statusSlot || (
+          <StatusBadge
+            status={statusType}
+            label={statusLabel}
+          />
         )}
 
         <button
