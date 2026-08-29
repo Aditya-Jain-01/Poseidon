@@ -1,0 +1,35 @@
+.common-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(17, 26, 48, 0.5), rgba(17, 26, 48, 0.15));
+  padding: 20px 22px;
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.common-card:hover {
+  border-color: rgba(124, 156, 255, 0.3);
+}
+
+.common-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.common-card-title {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+.common-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

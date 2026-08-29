@@ -1,0 +1,55 @@
+.common-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 0 4px;
+  user-select: none;
+}
+
+.common-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.common-tab-btn:hover {
+  color: var(--ink);
+  background: rgba(124, 156, 255, 0.04);
+}
+
+.common-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.common-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--line-soft);
+}
+
+.common-tab-btn.active .common-tab-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(124, 156, 255, 0.3);
+}

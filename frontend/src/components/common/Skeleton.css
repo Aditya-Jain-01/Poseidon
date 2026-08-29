@@ -1,0 +1,20 @@
+.common-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--panel) 0%,
+    rgba(22, 33, 60, 0.8) 50%,
+    var(--panel) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+  display: block;
+}
+
+@keyframes skeletonPulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

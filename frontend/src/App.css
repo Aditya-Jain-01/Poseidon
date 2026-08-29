@@ -1,0 +1,39 @@
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 100%;
+}
+
+/* Chat dock slot container — Person 2 plugs ChatDock here */
+.app-chat-slot {
+  width: var(--chat-dock-width);
+  min-width: var(--chat-dock-width);
+  height: 100%;
+  border-left: 1px solid var(--line);
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  transition: margin-right 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+
+.app-chat-slot.collapsed {
+  margin-right: calc(-1 * var(--chat-dock-width));
+  opacity: 0;
+  pointer-events: none;
+}
