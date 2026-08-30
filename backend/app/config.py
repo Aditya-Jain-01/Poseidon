@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     poseidon_consolidation_threshold: int = Field(30)
     poseidon_db_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "state.db")
 
+    # Embeddings (local sentence-transformers model for vector RAG)
+    poseidon_embedding_model: str = Field("all-MiniLM-L6-v2", description="HuggingFace sentence-transformers model name")
+    poseidon_embedding_dim: int = Field(384, description="Embedding vector dimension (must match the chosen model)")
+
     model_config = {
         "env_file": str(_PROJECT_ROOT / ".env"),
         "env_file_encoding": "utf-8",

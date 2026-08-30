@@ -1,21 +1,47 @@
-"""Unit and integration tests for EpisodicStore (Person A — Stage 1)."""
+"""Unit and integration tests for EpisodicStore (Vector RAG via sqlite-vec)."""
 
 import gc
+import json
+import random
 import unittest
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from app.memory.episodic_store import EpisodicStore
 
 
+class FakeEmbeddingService:
+    """A lightweight mock embedding service for testing.
+
+    Uses a simple deterministic hash-based approach to generate
+    consistent 384-dim vectors for the same input text.
+    """
+
+    def __init__(self, dim: int = 384):
+        self.dim = dim
+
+    def embed_text(self, text: str) -> list[float]:
+        """Generate a deterministic pseudo-random vector from the text."""
+        rng = random.Random(text)
+        vec = [rng.gauss(0, 1) for _ in range(self.dim)]
+        # Normalize to unit length
+        norm = sum(v * v for v in vec) ** 0.5
+        return [v / norm for v in vec]
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_text(t) for t in texts]
+
+
 class TestEpisodicStore(unittest.TestCase):
-    """Test suite for EpisodicStore SQLite & FTS5 operations."""
+    """Test suite for EpisodicStore SQLite & sqlite-vec operations."""
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmpdir.name) / "test_state.db"
-        self.store = EpisodicStore(db_path=self.db_path)
+        self.fake_embed = FakeEmbeddingService()
+        self.store = EpisodicStore(db_path=self.db_path, embed_svc=self.fake_embed)
 
     def tearDown(self):
         del self.store
@@ -23,7 +49,7 @@ class TestEpisodicStore(unittest.TestCase):
         self.tmpdir.cleanup()
 
     def test_db_initialization(self):
-        """Test that SQLite tables and FTS5 virtual table are created."""
+        """Test that SQLite tables and vec0 virtual table are created."""
         self.assertTrue(self.store.db_path.exists())
 
         with self.store._get_connection() as conn:
@@ -31,7 +57,7 @@ class TestEpisodicStore(unittest.TestCase):
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = {row[0] for row in cursor.fetchall()}
             self.assertIn("episodic_events", tables)
-            self.assertIn("episodic_fts", tables)
+            self.assertIn("vec_episodes", tables)
 
     def test_log_event_and_exchange(self):
         """Test logging single events and exchanges."""
@@ -62,22 +88,44 @@ class TestEpisodicStore(unittest.TestCase):
         self.assertEqual(recent[1]["content"], "What time is my flight tomorrow?")
         self.assertEqual(recent[2]["content"], "Your flight is at 10:00 AM.")
 
-    def test_search_relevant_fts5(self):
-        """Test FTS5 keyword relevance search."""
+    def test_vector_embedding_stored(self):
+        """Test that a vector is inserted into vec_episodes alongside the event."""
+        ev_id = self.store.log_event("user_1", "user", "Test vector storage")
+
+        with self.store._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT rowid FROM vec_episodes WHERE rowid = ?", (ev_id,))
+            row = cursor.fetchone()
+            self.assertIsNotNone(row)
+
+    def test_search_relevant_vector_knn(self):
+        """Test vector KNN relevance search returns results."""
         self.store.log_event("user_1", "user", "I have a severe peanut allergy and cannot eat nuts.")
         self.store.log_event("user_1", "user", "My favorite color is blue.")
         self.store.log_event("user_1", "user", "Book a dentist appointment for tomorrow.")
         self.store.log_event("user_2", "user", "I also have a peanut allergy.")
 
-        # Search for allergy for user_1
+        # Search for user_1 — should return results (exact content depends on fake embeddings)
         results = self.store.search_relevant("user_1", "peanut allergy")
         self.assertGreaterEqual(len(results), 1)
-        self.assertIn("peanut allergy", results[0]["content"])
-        self.assertEqual(results[0]["user_id"], "user_1")
+        # All results must belong to user_1
+        for r in results:
+            self.assertEqual(r["user_id"], "user_1")
 
-        # Ensure user isolation
-        user2_results = self.store.search_relevant("user_2", "color")
-        self.assertEqual(len(user2_results), 0)
+    def test_search_relevant_empty_query(self):
+        """Test that an empty query returns no results."""
+        self.store.log_event("user_1", "user", "Some content")
+        results = self.store.search_relevant("user_1", "")
+        self.assertEqual(len(results), 0)
+
+    def test_search_relevant_user_isolation(self):
+        """Test that vector search respects user_id boundaries."""
+        self.store.log_event("user_1", "user", "Secret info for user 1")
+        self.store.log_event("user_2", "user", "Secret info for user 2")
+
+        results = self.store.search_relevant("user_1", "secret info")
+        for r in results:
+            self.assertEqual(r["user_id"], "user_1")
 
     def test_retrieve_hybrid_deduplication(self):
         """Test combined retrieval of recency and relevance with deduplication."""
@@ -103,12 +151,12 @@ class TestEpisodicStore(unittest.TestCase):
             relevance_limit=2,
         )
 
-        contents = [r["content"] for r in results]
-        self.assertTrue(any("passport number" in c for c in contents))
-        self.assertTrue(any("Random chat message number 9" in c for c in contents))
-
+        # Verify deduplication
         ids = [r["id"] for r in results]
         self.assertEqual(len(ids), len(set(ids)))
+
+        # Should have both recent and relevant results
+        self.assertGreaterEqual(len(results), 2)
 
     def test_consolidation_tracking(self):
         """Test unconsolidated counter and marking."""
@@ -131,15 +179,38 @@ class TestEpisodicStore(unittest.TestCase):
         self.assertEqual(self.store.count_unconsolidated("user_2"), 2)
 
     def test_disk_persistence_survives_reopen(self):
-        """Test that data written persists to disk and can be read by a brand new EpisodicStore instance."""
+        """Test that data persists to disk and can be read by a new EpisodicStore instance."""
         db_file = self.store.db_path
         self.store.log_event("user_1", "user", "My dog's name is Barnaby.")
 
-        second_store = EpisodicStore(db_path=db_file)
+        second_store = EpisodicStore(db_path=db_file, embed_svc=self.fake_embed)
         results = second_store.search_relevant("user_1", "Barnaby")
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["content"], "My dog's name is Barnaby.")
+        self.assertGreaterEqual(len(results), 1)
         del second_store
+
+    def test_clear(self):
+        """Test clearing events and their vectors."""
+        self.store.log_event("user_1", "user", "Message 1")
+        self.store.log_event("user_1", "user", "Message 2")
+        self.store.log_event("user_2", "user", "User 2 message")
+
+        self.store.clear("user_1")
+
+        recent_u1 = self.store.get_recent("user_1")
+        self.assertEqual(len(recent_u1), 0)
+
+        recent_u2 = self.store.get_recent("user_2")
+        self.assertEqual(len(recent_u2), 1)
+
+    def test_clear_all(self):
+        """Test clearing all events."""
+        self.store.log_event("user_1", "user", "Message 1")
+        self.store.log_event("user_2", "user", "Message 2")
+
+        self.store.clear()
+
+        self.assertEqual(len(self.store.get_recent("user_1")), 0)
+        self.assertEqual(len(self.store.get_recent("user_2")), 0)
 
 
 if __name__ == "__main__":

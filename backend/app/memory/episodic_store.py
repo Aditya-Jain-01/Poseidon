@@ -1,57 +1,57 @@
-"""Episodic Memory Store — SQLite structured log + FTS5 full-text search index.
+"""Episodic Memory Store — SQLite structured log + sqlite-vec vector RAG.
 
-Sprint 2 (Person A):
+Sprint 2 (Vector RAG Upgrade):
 - Persistent episodic store on disk (`memory-store/state.db`).
 - SQLite table for chronological dated events and chat history.
-- FTS5 virtual table for keyword relevance ranking.
-- SQL recency retrieval + FTS5 relevance retrieval blended into Working Memory.
+- sqlite-vec virtual table for vector similarity (KNN) retrieval.
+- SQL recency retrieval + Vector RAG relevance retrieval blended into Working Memory.
 - Consolidation counting support ("only after N new chats").
 """
 
 import json
-import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Generator
 
+import sqlite_vec
+
 from app.config import settings
-
-
-def _sanitize_fts_query(query: str) -> str:
-    """Sanitize user query string for SQLite FTS5 MATCH syntax."""
-    tokens = re.findall(r"\w+", query, re.UNICODE)
-    if not tokens:
-        return ""
-    return " OR ".join(f'"{token}"*' for token in tokens)
+from app.memory.embeddings import embedding_service
 
 
 class EpisodicStore:
-    """SQLite-backed episodic memory with full-text search (FTS5)."""
+    """SQLite-backed episodic memory with sqlite-vec vector search (RAG)."""
 
-    def __init__(self, db_path: Path | str | None = None) -> None:
+    def __init__(self, db_path: Path | str | None = None, embed_svc=None) -> None:
         if db_path is None:
             self.db_path = Path(settings.poseidon_db_path)
         else:
             self.db_path = Path(db_path)
+        self._embed = embed_svc or embedding_service
+        self._dim = settings.poseidon_embedding_dim
         self.init_db()
 
     @contextmanager
     def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager creating a connection and ensuring it is cleanly closed."""
+        """Context manager creating a connection with sqlite-vec loaded."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
         try:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
+            # Load the sqlite-vec extension
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            conn.enable_load_extension(False)
             yield conn
         finally:
             conn.close()
 
     def init_db(self) -> None:
-        """Initialize database schema, tables, indices, and FTS5 virtual table."""
+        """Initialize database schema, tables, indices, and vec0 virtual table."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -81,42 +81,11 @@ class EpisodicStore:
                 ON episodic_events(consolidated);
             """)
 
-            # 3. FTS5 virtual table for keyword relevance search
-            cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS episodic_fts USING fts5(
-                    content,
-                    user_id UNINDEXED,
-                    event_id UNINDEXED,
-                    tokenize='unicode61'
+            # 3. sqlite-vec virtual table for vector similarity search
+            cursor.execute(f"""
+                CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodes USING vec0(
+                    embedding float[{self._dim}]
                 );
-            """)
-
-            # 4. Triggers to keep FTS5 synchronized with episodic_events
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS trg_episodic_after_insert
-                AFTER INSERT ON episodic_events
-                BEGIN
-                    INSERT INTO episodic_fts(rowid, content, user_id, event_id)
-                    VALUES (new.id, new.content, new.user_id, new.id);
-                END;
-            """)
-
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS trg_episodic_after_delete
-                AFTER DELETE ON episodic_events
-                BEGIN
-                    DELETE FROM episodic_fts WHERE rowid = old.id;
-                END;
-            """)
-
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS trg_episodic_after_update
-                AFTER UPDATE ON episodic_events
-                BEGIN
-                    DELETE FROM episodic_fts WHERE rowid = old.id;
-                    INSERT INTO episodic_fts(rowid, content, user_id, event_id)
-                    VALUES (new.id, new.content, new.user_id, new.id);
-                END;
             """)
 
             conn.commit()
@@ -131,12 +100,16 @@ class EpisodicStore:
         metadata: dict[str, Any] | None = None,
         created_at: str | datetime | None = None,
     ) -> int:
-        """Log a single episodic event into persistent storage.
+        """Log a single episodic event and store its vector embedding.
 
         Returns the newly created event ID.
         """
         meta_json = json.dumps(metadata) if metadata else None
         ts = created_at.isoformat() if isinstance(created_at, datetime) else created_at
+
+        # Generate the embedding vector for this content
+        vector = self._embed.embed_text(content)
+        vec_json = json.dumps(vector)
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -157,6 +130,13 @@ class EpisodicStore:
                     (user_id, channel, run_id, role, content, meta_json),
                 )
             event_id = cursor.lastrowid
+
+            # Insert the vector into vec_episodes (rowid must match event id)
+            cursor.execute(
+                "INSERT INTO vec_episodes(rowid, embedding) VALUES (?, ?)",
+                (event_id, vec_json),
+            )
+
             conn.commit()
             return int(event_id)
 
@@ -222,32 +202,61 @@ class EpisodicStore:
         query: str,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Search episodic events matching query using FTS5 keyword relevance.
+        """Search episodic events using vector similarity (KNN).
 
-        Returns matching events ranked by BM25 relevance.
+        Embeds the query, finds the closest vectors in vec_episodes,
+        then joins back to episodic_events for the full record.
+        Filters by user_id after the KNN search.
         """
-        sanitized = _sanitize_fts_query(query)
-        if not sanitized:
+        if not query.strip():
             return []
 
+        # Embed the query text
+        query_vector = self._embed.embed_text(query)
+        vec_json = json.dumps(query_vector)
+
+        # KNN search via sqlite-vec: fetch more than `limit` to allow for
+        # user_id filtering (vec0 doesn't support WHERE on external columns)
+        fetch_limit = limit * 4
+
+        # sqlite-vec requires `AND k = ?` instead of `LIMIT ?` for KNN queries
         sql = """
-            SELECT e.id, e.user_id, e.channel, e.run_id, e.role, e.content, e.created_at, e.metadata, e.consolidated,
-                   bm25(episodic_fts) as rank
-            FROM episodic_fts f
-            JOIN episodic_events e ON f.rowid = e.id
-            WHERE episodic_fts MATCH ? AND f.user_id = ?
-            ORDER BY rank
-            LIMIT ?
+            SELECT v.rowid AS event_id, v.distance
+            FROM vec_episodes v
+            WHERE v.embedding MATCH ?
+              AND k = ?
+            ORDER BY v.distance
         """
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute(sql, (sanitized, user_id, limit))
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+                cursor.execute(sql, (vec_json, fetch_limit))
+                vec_rows = cursor.fetchall()
             except sqlite3.OperationalError:
                 return []
+
+            if not vec_rows:
+                return []
+
+            # Fetch full event records and filter by user_id
+            results: list[dict[str, Any]] = []
+            for vr in vec_rows:
+                if len(results) >= limit:
+                    break
+                ev_cursor = conn.cursor()
+                ev_cursor.execute(
+                    "SELECT id, user_id, channel, run_id, role, content, created_at, metadata, consolidated "
+                    "FROM episodic_events WHERE id = ? AND user_id = ?",
+                    (vr["event_id"], user_id),
+                )
+                row = ev_cursor.fetchone()
+                if row:
+                    event_dict = dict(row)
+                    event_dict["_vec_distance"] = vr["distance"]
+                    results.append(event_dict)
+
+            return results
 
     def retrieve(
         self,
@@ -256,14 +265,14 @@ class EpisodicStore:
         recency_limit: int = 5,
         relevance_limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Hybrid retrieval combining FTS5 relevance and SQL recency.
+        """Hybrid retrieval combining Vector RAG relevance and SQL recency.
 
         Deduplicates records and returns them in chronological order.
         """
-        # 1. Fetch relevant records
+        # 1. Fetch relevant records (Vector RAG)
         relevant_events = self.search_relevant(user_id, query, limit=relevance_limit)
 
-        # 2. Fetch recent records
+        # 2. Fetch recent records (SQL)
         recent_events = self.get_recent(user_id, limit=recency_limit)
 
         # 3. Merge and deduplicate by ID
@@ -273,6 +282,8 @@ class EpisodicStore:
         for ev in relevant_events:
             if ev["id"] not in seen_ids:
                 seen_ids.add(ev["id"])
+                # Remove the internal distance field before returning
+                ev.pop("_vec_distance", None)
                 combined.append(ev)
 
         for ev in recent_events:
@@ -326,9 +337,15 @@ class EpisodicStore:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             if user_id:
+                # Get IDs to delete from vec table
+                cursor.execute("SELECT id FROM episodic_events WHERE user_id = ?", (user_id,))
+                ids = [row[0] for row in cursor.fetchall()]
                 cursor.execute("DELETE FROM episodic_events WHERE user_id = ?", (user_id,))
+                for eid in ids:
+                    cursor.execute("DELETE FROM vec_episodes WHERE rowid = ?", (eid,))
             else:
                 cursor.execute("DELETE FROM episodic_events")
+                cursor.execute("DELETE FROM vec_episodes")
             conn.commit()
 
 
