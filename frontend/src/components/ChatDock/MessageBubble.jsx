@@ -1,14 +1,17 @@
 import React from 'react';
 import Markdown from 'react-markdown';
+import { ApprovalCard } from '../ApprovalCard/ApprovalCard';
 import './MessageBubble.css';
 
 /**
  * Renders a single chat message — user or agent.
  * Agent messages render markdown; user messages are plain text.
+ * Also renders inline tool approval requests with risk analysis.
  */
-export function MessageBubble({ message }) {
+export function MessageBubble({ message, onApprove, onDeny }) {
   const isUser = message.role === 'user';
   const isError = message.isError;
+  const approval = message.approvalRequest;
 
   const timeStr = formatRelativeTime(message.timestamp);
 
@@ -18,27 +21,47 @@ export function MessageBubble({ message }) {
         {isUser ? (
           <p>{message.content}</p>
         ) : (
-          <Markdown
-            components={{
-              // Custom code styling
-              code({ className = '', children, ...props }) {
-                return <code className={`inline-code ${className}`.trim()} {...props}>{children}</code>;
-              },
-              pre({ children, ...props }) {
-                return (
-                  <pre className="code-block" {...props}>
-                    {children}
-                  </pre>
-                );
-              },
-              // Open links in new tab
-              a({ children, ...props }) {
-                return <a target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
-              },
-            }}
-          >
-            {message.content}
-          </Markdown>
+          <>
+            {message.content && (
+              <Markdown
+                components={{
+                  // Custom code styling
+                  code({ className = '', children, ...props }) {
+                    return <code className={`inline-code ${className}`.trim()} {...props}>{children}</code>;
+                  },
+                  pre({ children, ...props }) {
+                    return (
+                      <pre className="code-block" {...props}>
+                        {children}
+                      </pre>
+                    );
+                  },
+                  // Open links in new tab
+                  a({ children, ...props }) {
+                    return <a target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
+                  },
+                }}
+              >
+                {message.content}
+              </Markdown>
+            )}
+
+            {/* Inline Tool Approval Card */}
+            {approval && (
+              <ApprovalCard
+                approvalId={approval.id || message.runId}
+                toolName={approval.tool}
+                arguments={approval.arguments}
+                diff={approval.diff}
+                dangerousParams={approval.dangerous_params}
+                warnings={approval.warnings}
+                riskLevel={approval.risk_level}
+                isTainted={approval.is_tainted}
+                onApprove={onApprove}
+                onDeny={onDeny}
+              />
+            )}
+          </>
         )}
       </div>
 

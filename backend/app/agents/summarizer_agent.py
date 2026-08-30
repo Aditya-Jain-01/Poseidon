@@ -17,6 +17,7 @@ from app.config import settings
 from app.memory.semantic_store import semantic_store
 from app.memory.procedural_store import procedural_store
 from app.memory.episodic_store import episodic_store
+from app.security.adversarial_filter import AdversarialReviewer
 
 
 SUMMARIZER_SYSTEM_PROMPT = """You are the Memory Consolidation & Synthesis Subsystem for the Poseidon Personal AI Agent.
@@ -158,10 +159,14 @@ async def summarize_and_consolidate(
 
     # 1. Run LLM summarization
     summary = await summarize_events(events)
-    extracted_facts = summary.get("facts", [])
-    extracted_skills = summary.get("skills", [])
+    raw_facts = summary.get("facts", [])
+    raw_skills = summary.get("skills", [])
 
-    # 2. Persist semantic facts
+    # 1b. Pass candidate items through AdversarialReviewer (Memory Poisoning Filter)
+    extracted_facts, rejected_facts = AdversarialReviewer.filter_facts(raw_facts)
+    extracted_skills, rejected_skills = AdversarialReviewer.filter_skills(raw_skills)
+
+    # 2. Persist safe semantic facts
     added_fact_ids = []
     latest_run_id = next((e.get("run_id") for e in reversed(events) if e.get("run_id")), None)
 
@@ -179,7 +184,7 @@ async def summarize_and_consolidate(
             )
             added_fact_ids.append(fact_id)
 
-    # 3. Persist procedural skills if any
+    # 3. Persist safe procedural skills if any
     added_skill_names = []
     for skill_item in extracted_skills:
         if isinstance(skill_item, dict) and skill_item.get("name") and skill_item.get("content"):
@@ -207,6 +212,8 @@ async def summarize_and_consolidate(
         "events_processed": len(events),
         "facts_added": len(added_fact_ids),
         "skills_added": len(added_skill_names),
+        "facts_rejected": len(rejected_facts),
+        "skills_rejected": len(rejected_skills),
         "fact_ids": added_fact_ids,
         "skills": added_skill_names,
     }

@@ -44,6 +44,7 @@ export function ChatProvider({ children }) {
         role: 'agent',
         content: data.reply,
         runId: data.run_id,
+        approvalRequest: data.approval_request || null,
         timestamp: new Date().toISOString(),
       };
 

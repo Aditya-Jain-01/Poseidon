@@ -15,7 +15,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Generator
 
-import sqlite_vec
+try:
+    import sqlite_vec
+    HAS_SQLITE_VEC = True
+except ImportError:
+    sqlite_vec = None
+    HAS_SQLITE_VEC = False
+
+import numpy as np
 
 from app.config import settings
 from app.memory.embeddings import embedding_service
@@ -35,17 +42,20 @@ class EpisodicStore:
 
     @contextmanager
     def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager creating a connection with sqlite-vec loaded."""
+        """Context manager creating a connection with sqlite-vec loaded if available."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
         try:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
-            # Load the sqlite-vec extension
-            conn.enable_load_extension(True)
-            sqlite_vec.load(conn)
-            conn.enable_load_extension(False)
+            if HAS_SQLITE_VEC and sqlite_vec is not None:
+                try:
+                    conn.enable_load_extension(True)
+                    sqlite_vec.load(conn)
+                    conn.enable_load_extension(False)
+                except Exception:
+                    pass
             yield conn
         finally:
             conn.close()
@@ -81,12 +91,20 @@ class EpisodicStore:
                 ON episodic_events(consolidated);
             """)
 
-            # 3. sqlite-vec virtual table for vector similarity search
-            cursor.execute(f"""
-                CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodes USING vec0(
-                    embedding float[{self._dim}]
-                );
-            """)
+            # 3. sqlite-vec virtual table for vector similarity search (or fallback table)
+            try:
+                cursor.execute(f"""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodes USING vec0(
+                        embedding float[{self._dim}]
+                    );
+                """)
+            except Exception:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS vec_episodes (
+                        rowid INTEGER PRIMARY KEY,
+                        embedding TEXT
+                    );
+                """)
 
             conn.commit()
 
@@ -132,10 +150,13 @@ class EpisodicStore:
             event_id = cursor.lastrowid
 
             # Insert the vector into vec_episodes (rowid must match event id)
-            cursor.execute(
-                "INSERT INTO vec_episodes(rowid, embedding) VALUES (?, ?)",
-                (event_id, vec_json),
-            )
+            try:
+                cursor.execute(
+                    "INSERT INTO vec_episodes(rowid, embedding) VALUES (?, ?)",
+                    (event_id, vec_json),
+                )
+            except Exception:
+                pass
 
             conn.commit()
             return int(event_id)
@@ -233,30 +254,63 @@ class EpisodicStore:
             try:
                 cursor.execute(sql, (vec_json, fetch_limit))
                 vec_rows = cursor.fetchall()
+                if not vec_rows:
+                    return []
+                results: list[dict[str, Any]] = []
+                for vr in vec_rows:
+                    if len(results) >= limit:
+                        break
+                    ev_cursor = conn.cursor()
+                    ev_cursor.execute(
+                        "SELECT id, user_id, channel, run_id, role, content, created_at, metadata, consolidated "
+                        "FROM episodic_events WHERE id = ? AND user_id = ?",
+                        (vr["event_id"], user_id),
+                    )
+                    row = ev_cursor.fetchone()
+                    if row:
+                        event_dict = dict(row)
+                        event_dict["_vec_distance"] = vr["distance"]
+                        results.append(event_dict)
+                return results
             except sqlite3.OperationalError:
-                return []
+                # Fallback: load embeddings from table and compute cosine distance in Python
+                try:
+                    cursor.execute("""
+                        SELECT e.id, e.user_id, e.channel, e.run_id, e.role, e.content, e.created_at, e.metadata, e.consolidated, v.embedding
+                        FROM episodic_events e
+                        JOIN vec_episodes v ON e.id = v.rowid
+                        WHERE e.user_id = ?
+                    """, (user_id,))
+                    all_rows = cursor.fetchall()
+                    if not all_rows:
+                        return []
+                    
+                    q_arr = np.array(query_vector, dtype=float)
+                    q_norm = np.linalg.norm(q_arr)
+                    if q_norm == 0:
+                        return []
 
-            if not vec_rows:
-                return []
+                    scored = []
+                    for r in all_rows:
+                        r_dict = dict(r)
+                        emb_raw = r_dict.pop("embedding", None)
+                        if emb_raw:
+                            try:
+                                emb_list = json.loads(emb_raw) if isinstance(emb_raw, str) else emb_raw
+                                v_arr = np.array(emb_list, dtype=float)
+                                v_norm = np.linalg.norm(v_arr)
+                                if v_norm > 0:
+                                    sim = np.dot(q_arr, v_arr) / (q_norm * v_norm)
+                                    dist = 1.0 - float(sim)
+                                    r_dict["_vec_distance"] = dist
+                                    scored.append((dist, r_dict))
+                            except Exception:
+                                pass
 
-            # Fetch full event records and filter by user_id
-            results: list[dict[str, Any]] = []
-            for vr in vec_rows:
-                if len(results) >= limit:
-                    break
-                ev_cursor = conn.cursor()
-                ev_cursor.execute(
-                    "SELECT id, user_id, channel, run_id, role, content, created_at, metadata, consolidated "
-                    "FROM episodic_events WHERE id = ? AND user_id = ?",
-                    (vr["event_id"], user_id),
-                )
-                row = ev_cursor.fetchone()
-                if row:
-                    event_dict = dict(row)
-                    event_dict["_vec_distance"] = vr["distance"]
-                    results.append(event_dict)
-
-            return results
+                    scored.sort(key=lambda x: x[0])
+                    return [item[1] for item in scored[:limit]]
+                except Exception:
+                    return []
 
     def retrieve(
         self,

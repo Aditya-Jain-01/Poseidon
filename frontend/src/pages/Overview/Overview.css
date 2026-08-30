@@ -121,3 +121,61 @@
   border-top: 1px solid var(--line-soft);
   padding-top: 8px;
 }
+
+/* Security Demo Card */
+.security-demo-card {
+  padding: 16px;
+}
+
+.security-demo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.security-demo-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.security-demo-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.demo-tab-btn {
+  background: var(--panel-hover, #16213c);
+  border: 1px solid var(--line, #243354);
+  color: var(--muted, #9aa8c7);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.demo-tab-btn:hover {
+  color: var(--ink, #eef2fb);
+  border-color: var(--accent, #7c9cff);
+}
+
+.demo-tab-btn.active {
+  background: var(--accent-soft, rgba(124, 156, 255, 0.12));
+  border-color: var(--accent, #7c9cff);
+  color: var(--ink, #eef2fb);
+}
+
+.demo-tab-btn.active.danger-btn {
+  background: rgba(255, 107, 122, 0.18);
+  border-color: var(--danger, #ff6b7a);
+  color: #ff8593;
+  box-shadow: 0 0 10px rgba(255, 107, 122, 0.25);
+}

@@ -12,6 +12,8 @@ from app.orchestration.state import AgentState, InboundEvent
 from app.memory.working_memory import assemble, session_store
 from app.memory.episodic_store import episodic_store
 from app.agents import qa_agent
+from app.security.taint import is_channel_untrusted
+from app.security.dlp import DLPScanner
 
 
 async def agent_node(state: AgentState) -> dict:
@@ -35,9 +37,15 @@ async def run_agent(event: InboundEvent, run_id: str) -> str:
     """Entry point called by the gateway adapter.
 
     Assembles Working Memory from the event, invokes the graph,
-    persists the exchange in session history, and returns the reply.
+    scans output with DLP, persists the exchange, and returns the reply.
     """
     messages = assemble(event.text, event.user_id)
+
+    # Determine taint status
+    is_tainted = event.is_tainted or is_channel_untrusted(event.channel)
+    taint_sources = list(event.taint_sources)
+    if is_tainted and event.channel not in taint_sources:
+        taint_sources.append(event.channel)
 
     initial_state: AgentState = {
         "messages": messages,
@@ -46,23 +54,30 @@ async def run_agent(event: InboundEvent, run_id: str) -> str:
         "run_id": run_id,
         "iteration_count": 0,
         "tool_call_count": 0,
+        "is_tainted": is_tainted,
+        "taint_sources": taint_sources,
+        "pending_approvals": [],
     }
 
     result = await graph.ainvoke(initial_state)
 
-    # The last message in the list is the AI reply
-    reply_text = result["messages"][-1].content
+    # The last message in the list is the raw AI reply
+    raw_reply_text = result["messages"][-1].content
+
+    # Outbound DLP scanning & redaction
+    dlp_result = DLPScanner.scan_and_redact(raw_reply_text)
+    safe_reply_text = dlp_result.sanitized_text
 
     # Save to in-session history (lost on restart)
-    session_store.append(event.user_id, event.text, reply_text)
+    session_store.append(event.user_id, event.text, safe_reply_text)
 
     # Persist exchange to episodic memory (survives restart)
     episodic_store.log_exchange(
         user_id=event.user_id,
         human_msg=event.text,
-        ai_msg=reply_text,
+        ai_msg=safe_reply_text,
         channel=event.channel,
         run_id=run_id,
     )
 
-    return reply_text
+    return safe_reply_text

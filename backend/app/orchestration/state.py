@@ -7,7 +7,7 @@ This TypedDict is the state that flows through every node in the graph.
 from datetime import datetime
 from typing import Annotated
 from typing_extensions import TypedDict
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 
@@ -23,6 +23,8 @@ class InboundEvent(BaseModel):
     channel_thread_id: str
     text: str
     timestamp: datetime
+    is_tainted: bool = False
+    taint_sources: list[str] = Field(default_factory=list)
 
 
 class AgentState(TypedDict):
@@ -37,3 +39,6 @@ class AgentState(TypedDict):
     run_id: str
     iteration_count: int
     tool_call_count: int
+    is_tainted: bool
+    taint_sources: list[str]
+    pending_approvals: list[dict]
