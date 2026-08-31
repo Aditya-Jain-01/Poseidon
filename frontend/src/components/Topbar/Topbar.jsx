@@ -1,60 +1,37 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
-import StatusBadge from '../common/StatusBadge';
-import { useHealth } from '../../context/HealthContext';
+import { 
+  Sun, 
+  Moon, 
+  PanelRight
+} from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
 import './Topbar.css';
 
-export function Topbar({ isChatOpen = true, onToggleChat, statusSlot = null }) {
-  const { isConnected, modelName, isLoading } = useHealth();
-
-  const statusLabel = isConnected
-    ? modelName ? modelName.replace('google/', '') : 'Connected'
-    : isLoading ? 'Connecting...' : 'Disconnected';
-
-  const statusType = isLoading ? 'loading' : isConnected ? 'connected' : 'disconnected';
+export function Topbar({ isRightPanelOpen, onToggleRightPanel }) {
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="topbar">
-      <div className="topbar-left">
-        <NavLink to="/" className="topbar-brand">
-          <span>POSEIDON</span>
-          <span className="topbar-brand-dot" />
-        </NavLink>
-        <span className="topbar-brand-tag">v0.1</span>
-      </div>
-
-      <nav className="topbar-nav">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`}
-        >
-          Overview
-        </NavLink>
-        <NavLink
-          to="/gateway"
-          className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`}
-        >
-          Gateway
-        </NavLink>
-      </nav>
-
+      {/* Right Utilities */}
       <div className="topbar-right">
-        {statusSlot || (
-          <StatusBadge
-            status={statusType}
-            label={statusLabel}
-          />
-        )}
-
+        {/* Theme Toggle Button */}
         <button
-          className={`topbar-chat-btn ${isChatOpen ? 'active' : ''}`}
-          onClick={onToggleChat}
-          title={isChatOpen ? 'Hide Chat Dock' : 'Show Chat Dock'}
-          aria-label="Toggle chat dock"
+          className="topbar-icon-btn theme-toggle-btn"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? "Switch to Light Theme" : "Switch to Dark Theme"}
+          aria-label="Toggle theme"
         >
-          <MessageSquare size={16} />
+          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+
+        {/* Inspector Toggle */}
+        <button
+          className={`topbar-icon-btn ${isRightPanelOpen ? 'active' : ''}`}
+          onClick={onToggleRightPanel}
+          title="Toggle Trajectory &amp; Telemetry Inspector"
+          aria-label="Toggle Inspector"
+        >
+          <PanelRight size={16} />
         </button>
       </div>
     </header>

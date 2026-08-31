@@ -11,6 +11,12 @@ Thumbs.db
 .env
 .env.local
 
+# Database & local state files
+*.db
+*.sqlite
+*.sqlite3
+memory-store/*.db
+
 # IDEs and Editors
 .idea/
 .vscode/

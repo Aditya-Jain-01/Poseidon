@@ -1,35 +1,35 @@
 .common-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(17, 26, 48, 0.5), rgba(17, 26, 48, 0.15));
-  padding: 20px 22px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  padding: 14px 16px;
   position: relative;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color var(--ease-fast), background-color var(--ease-fast);
 }
 
 .common-card:hover {
-  border-color: rgba(124, 156, 255, 0.3);
+  border-color: var(--border-strong);
 }
 
 .common-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .common-card-title {
   font-family: var(--font-heading);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--ink);
-  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .common-card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }

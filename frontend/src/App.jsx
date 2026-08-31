@@ -1,50 +1,102 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Topbar from './components/Topbar/Topbar';
-import Overview from './pages/Overview/Overview';
+import LeftSidebar from './components/LeftSidebar/LeftSidebar';
+import RightPanel from './components/RightPanel/RightPanel';
 import Gateway from './pages/Gateway/Gateway';
 import { ChatProvider, useChat } from './context/ChatContext';
 import { HealthProvider } from './context/HealthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ChatDock from './components/ChatDock/ChatDock';
 import './App.css';
 
 function AppLayout() {
-  const { isDockOpen, toggleDock, dockWidth, isExpanded } = useChat();
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isRightCollapsed, setIsRightCollapsed] = useState(true);
+  const [rightPanelWidth, setRightPanelWidth] = useState(380);
+  const [isResizingRight, setIsResizingRight] = useState(false);
 
-  const currentWidth = isExpanded ? 'min(860px, 65vw)' : `${dockWidth}px`;
+  const { isOverviewOpen, toggleOverview, closeOverview } = useChat();
+
+  // Synchronize context overview toggle with right panel collapse
+  useEffect(() => {
+    setIsRightCollapsed(!isOverviewOpen);
+  }, [isOverviewOpen]);
+
+  // Handle Drag-to-Resize Right Panel
+  useEffect(() => {
+    if (!isResizingRight) return;
+
+    const handleMouseMove = (e) => {
+      const newWidth = window.innerWidth - e.clientX;
+      const minWidth = 280;
+      const maxWidth = Math.min(850, window.innerWidth * 0.65);
+      setRightPanelWidth(Math.max(minWidth, Math.min(newWidth, maxWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingRight(false);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingRight]);
+
+  const handleMouseDownResize = (e) => {
+    e.preventDefault();
+    setIsResizingRight(true);
+  };
+
+  const handleToggleLeft = () => setIsLeftCollapsed((prev) => !prev);
+  const handleToggleRight = () => toggleOverview();
 
   return (
-    <div className="app-layout">
-      <Topbar
-        isChatOpen={isDockOpen}
-        onToggleChat={toggleDock}
+    <div className="app-workspace-layout">
+      {/* 1. Left Navigation Sidebar */}
+      <LeftSidebar
+        isCollapsed={isLeftCollapsed}
+        onToggleCollapse={handleToggleLeft}
       />
-      <div className="app-body">
-        <main className="app-content">
+
+      {/* 2. Center Main Canvas (Top bar removed) */}
+      <div className="center-workspace">
+        <main className="center-content">
           <Routes>
-            <Route path="/" element={<Overview />} />
+            <Route path="/" element={<ChatDock />} />
             <Route path="/gateway" element={<Gateway />} />
           </Routes>
         </main>
-
-        <aside
-          className={`app-chat-slot ${isDockOpen ? '' : 'collapsed'} ${isExpanded ? 'is-expanded' : ''}`}
-          style={{ width: currentWidth, minWidth: isExpanded ? '480px' : '340px' }}
-        >
-          <ChatDock />
-        </aside>
       </div>
+
+      {/* 3. Right Trajectory & Diagnostics Inspector Side Window */}
+      <RightPanel
+        isCollapsed={isRightCollapsed}
+        onToggleCollapse={handleToggleRight}
+        width={rightPanelWidth}
+        onMouseDownResize={handleMouseDownResize}
+      />
     </div>
   );
 }
 
 export function App() {
   return (
-    <HealthProvider>
-      <ChatProvider>
-        <AppLayout />
-      </ChatProvider>
-    </HealthProvider>
+    <ThemeProvider>
+      <HealthProvider>
+        <ChatProvider>
+          <AppLayout />
+        </ChatProvider>
+      </HealthProvider>
+    </ThemeProvider>
   );
 }
 

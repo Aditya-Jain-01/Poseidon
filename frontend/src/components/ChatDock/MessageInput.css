@@ -1,70 +1,196 @@
-/* ── Message Input Bar ── */
-
-.message-input-container {
+/* ── Modern Developer Prompt Command Box (Harness Style) ── */
+.message-input-dock {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--line);
-  background: var(--bg-deep);
+  width: 100%;
 }
 
-.message-input {
-  flex: 1;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 14px;
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 0.88rem;
-  line-height: 1.45;
+.message-input-dock.is-hero-input {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.message-command-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 12px 18px;
+  background: #1e222a;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  transition: all var(--ease-fast);
+}
+
+[data-theme="light"] .message-command-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.message-command-box:focus-within {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.command-textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  line-height: 1.5;
   resize: none;
   outline: none;
-  min-height: 40px;
-  max-height: 120px;
-  transition: border-color 0.15s ease;
+  min-height: 44px;
+  max-height: 160px;
 }
 
-.message-input::placeholder {
-  color: var(--muted-dim);
+.command-textarea::placeholder {
+  color: var(--text-tertiary);
+  font-size: 0.92rem;
 }
 
-.message-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
-
-.message-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.message-send-btn {
+/* ── Bottom Control Bar ── */
+.command-bar-bottom {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+/* Left Actions */
+.command-bottom-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-circle-add-btn {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  border-radius: 10px;
-  background: var(--accent);
-  color: var(--bg-deep);
+  color: var(--text-secondary);
   cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: all var(--ease-fast);
 }
 
-.message-send-btn:hover:not(:disabled) {
-  background: #93aaff;
-  transform: scale(1.05);
+[data-theme="light"] .input-circle-add-btn {
+  background: #f1f5f9;
+  color: #64748b;
 }
 
-.message-send-btn:active:not(:disabled) {
-  transform: scale(0.95);
+.input-circle-add-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
 }
 
-.message-send-btn:disabled {
-  opacity: 0.3;
+.input-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--ease-fast);
+}
+
+.input-permission-pill:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pill-shield-icon {
+  color: var(--text-tertiary);
+}
+
+.pill-chevron-icon {
+  color: var(--text-tertiary);
+}
+
+/* Right Actions */
+.command-bottom-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-model-selector-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--ease-fast);
+}
+
+.input-model-selector-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.model-selector-name {
+  color: var(--text-secondary);
+}
+
+.input-model-selector-btn:hover .model-selector-name {
+  color: var(--text-primary);
+}
+
+/* Circular Submit Arrow Button */
+.command-send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #334155;
+  color: #94a3b8;
+  border: none;
   cursor: not-allowed;
+  transition: all var(--ease-fast);
+}
+
+[data-theme="light"] .command-send-btn {
+  background: #e2e8f0;
+  color: #94a3b8;
+}
+
+.command-send-btn.active {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.45);
+  cursor: pointer;
+}
+
+.command-send-btn.active:hover {
+  background: #2563eb;
+  transform: scale(1.05);
 }

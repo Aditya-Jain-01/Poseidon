@@ -14,107 +14,114 @@ body {
 }
 
 body {
-  background-color: var(--bg);
-  background-image: 
-    radial-gradient(ellipse at 20% 0%, rgba(124, 156, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 100%, rgba(79, 214, 196, 0.05) 0%, transparent 50%);
-  background-attachment: fixed;
-  color: var(--ink);
-  font-family: var(--font-body);
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.5;
+  font-weight: 400;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  transition: background-color var(--ease-standard), color var(--ease-standard);
 }
 
 /* Custom Selection */
 ::selection {
-  background-color: var(--accent);
-  color: var(--bg-deep);
+  background-color: var(--accent-subtle);
+  color: var(--accent-primary);
 }
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-deep);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border-radius: 3px;
+  background: var(--border-default);
+  border-radius: var(--radius-xs);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-dim);
+  background: var(--border-strong);
 }
 
-/* Base Typography */
+/* Base Typography Hierarchy (Inter) */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: 600;
   line-height: 1.25;
+  letter-spacing: -0.015em;
 }
 
-h1 { font-size: 1.75rem; }
-h2 { font-size: 1.35rem; }
-h3 { font-size: 1.1rem; }
-h4 { font-size: 0.95rem; }
+h1 { font-size: 1.75rem; } /* 28px */
+h2 { font-size: 1.25rem; } /* 20px */
+h3 { font-size: 1.05rem; } /* ~17px */
+h4 { font-size: 0.88rem; } /* 14px */
 
 p {
-  color: var(--muted);
-  line-height: 1.5;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  font-weight: 400;
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-primary);
   text-decoration: none;
-  transition: color 0.15s ease;
+  transition: color var(--ease-fast);
 }
 
 a:hover {
-  color: #9cb5ff;
+  color: var(--accent-hover);
 }
 
+/* Technical Telemetry & Code (IBM Plex Mono) */
 code, pre {
   font-family: var(--font-mono);
-  font-size: 0.85em;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 code {
-  background: var(--panel-2);
-  border: 1px solid var(--line-soft);
-  padding: 0.15em 0.35em;
-  border-radius: 4px;
-  color: var(--teal);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  padding: 0.15em 0.4em;
+  border-radius: var(--radius-xs);
+  color: var(--mono-accent);
 }
 
 pre {
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  padding: 12px 14px;
-  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
   overflow-x: auto;
+  line-height: 1.4;
 }
 
 pre code {
   background: transparent;
   border: none;
   padding: 0;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 button {
-  font-family: inherit;
+  font-family: var(--font-sans);
   cursor: pointer;
   border: none;
   outline: none;
   background: transparent;
+}
+
+input, textarea {
+  font-family: var(--font-sans);
 }
 
 /* Utility Classes */
@@ -123,15 +130,26 @@ button {
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .muted-dim {
-  color: var(--muted-dim);
+  color: var(--text-tertiary);
 }
 
 .truncate {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

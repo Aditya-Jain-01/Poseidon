@@ -1,35 +1,174 @@
+:root,
+[data-theme="dark"] {
+  /* ── Dark Theme (DeepSeek Harness × Poseidon Abyssal Navy) ── */
+  --bg-canvas: #080c14;
+  --bg-sidebar: #0a101b;
+  --bg-surface: rgba(16, 25, 39, 0.85);
+  --bg-panel: rgba(14, 23, 38, 0.92);
+  --bg-elevated: rgba(18, 30, 48, 0.95);
+  --bg-input: rgba(13, 23, 38, 0.92);
+  --bg-hover: rgba(56, 189, 248, 0.07);
+  --bg-active: rgba(56, 189, 248, 0.14);
+  --bg-overlay: rgba(8, 12, 20, 0.85);
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(56, 189, 248, 0.12);
+  --border-strong: rgba(56, 189, 248, 0.24);
+  --border-focus: #38bdf8;
+
+  /* Text & Typography */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-muted: #64748b;
+  --text-disabled: #475569;
+
+  /* Poseidon Ocean / Sky Accents */
+  --accent-primary: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-subtle: rgba(56, 189, 248, 0.1);
+  --accent-border: rgba(56, 189, 248, 0.25);
+  --accent-glow: 0 0 16px rgba(56, 189, 248, 0.35);
+
+  --teal: #2dd4bf;
+  --teal-subtle: rgba(45, 212, 191, 0.1);
+  --teal-border: rgba(45, 212, 191, 0.25);
+
+  --success: #34d399;
+  --success-subtle: rgba(52, 211, 153, 0.1);
+  --success-border: rgba(52, 211, 153, 0.25);
+  --success-glow: 0 0 8px rgba(52, 211, 153, 0.5);
+
+  --warning: #fbbf24;
+  --warning-subtle: rgba(251, 191, 36, 0.1);
+  --warning-border: rgba(251, 191, 36, 0.25);
+
+  --danger: #f87171;
+  --danger-subtle: rgba(248, 113, 113, 0.1);
+  --danger-border: rgba(248, 113, 113, 0.25);
+
+  --mono-accent: #38bdf8;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border-default);
+
+  /* Legacy Aliases */
+  --bg: var(--bg-canvas);
+  --bg-deep: var(--bg-canvas);
+  --panel: var(--bg-surface);
+  --panel-2: var(--bg-elevated);
+  --panel-hover: var(--bg-hover);
+  --line: var(--border-default);
+  --line-soft: var(--border-subtle);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --muted-dim: var(--text-tertiary);
+  --accent: var(--accent-primary);
+  --accent-soft: var(--accent-subtle);
+  --amber: var(--warning);
+}
+
+[data-theme="light"] {
+  /* ── Light Theme (Pale-Ocean Developer Console) ── */
+  --bg-canvas: #f8fafc;
+  --bg-sidebar: #f1f5f9;
+  --bg-surface: rgba(255, 255, 255, 0.9);
+  --bg-panel: rgba(255, 255, 255, 0.95);
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: rgba(2, 132, 199, 0.06);
+  --bg-active: rgba(2, 132, 199, 0.1);
+  --bg-overlay: rgba(248, 250, 252, 0.85);
+
+  /* Borders & Dividers */
+  --border-subtle: #e2e8f0;
+  --border-default: #cbd5e1;
+  --border-strong: #94a3b8;
+  --border-focus: #0284c7;
+
+  /* Text & Typography */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+
+  /* Poseidon Ocean Accents */
+  --accent-primary: #0284c7;
+  --accent-hover: #0369a1;
+  --accent-subtle: rgba(2, 132, 199, 0.08);
+  --accent-border: rgba(2, 132, 199, 0.25);
+  --accent-glow: 0 0 16px rgba(2, 132, 199, 0.25);
+
+  --teal: #0d9488;
+  --teal-subtle: rgba(13, 148, 136, 0.1);
+  --teal-border: rgba(13, 148, 136, 0.25);
+
+  --success: #059669;
+  --success-subtle: rgba(5, 150, 105, 0.1);
+  --success-border: rgba(5, 150, 105, 0.25);
+  --success-glow: 0 0 8px rgba(5, 150, 105, 0.35);
+
+  --warning: #d97706;
+  --warning-subtle: rgba(217, 119, 6, 0.1);
+  --warning-border: rgba(217, 119, 6, 0.25);
+
+  --danger: #dc2626;
+  --danger-subtle: rgba(220, 38, 38, 0.1);
+  --danger-border: rgba(220, 38, 38, 0.25);
+
+  --mono-accent: #0284c7;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.1);
+  --shadow-popover: 0 16px 36px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border-default);
+
+  /* Legacy Aliases */
+  --bg: var(--bg-canvas);
+  --bg-deep: var(--bg-canvas);
+  --panel: var(--bg-surface);
+  --panel-2: var(--bg-elevated);
+  --panel-hover: var(--bg-hover);
+  --line: var(--border-default);
+  --line-soft: var(--border-subtle);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --muted-dim: var(--text-tertiary);
+  --accent: var(--accent-primary);
+  --accent-soft: var(--accent-subtle);
+  --amber: var(--warning);
+}
+
 :root {
-  /* Backgrounds */
-  --bg: #0a0f1e;
-  --bg-deep: #060a14;
-  --panel: #111a30;
-  --panel-2: #0d1526;
-  --panel-hover: #16213c;
+  /* ── Universal Structural Tokens ── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-2xl: 26px;
+  --radius-full: 9999px;
+  --radius: var(--radius-md);
 
-  /* Text */
-  --ink: #eef2fb;
-  --muted: #9aa8c7;
-  --muted-dim: #5f6d8c;
+  --topbar-height: 48px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 56px;
+  --inspector-width: 380px;
 
-  /* Borders */
-  --line: #243354;
-  --line-soft: #1a2540;
+  /* ── Typography Scale ── */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-body: var(--font-sans);
+  --font-mono: 'IBM Plex Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Accent colors */
-  --accent: #7c9cff;
-  --accent-soft: rgba(124, 156, 255, 0.12);
-  --teal: #4fd6c4;
-  --amber: #ffb454;
-  --danger: #ff6b7a;
-  --success: #4fd6a8;
-
-  /* Dimensions */
-  --radius: 10px;
-  --topbar-height: 52px;
-  --chat-dock-width: 380px;
-
-  /* Fonts */
-  --font-heading: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  /* ── Fluid Ocean Motion ── */
+  --ease-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-fluid: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }

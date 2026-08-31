@@ -2,15 +2,14 @@ import React from 'react';
 import './TypingIndicator.css';
 
 /**
- * Three pulsing dots that show while the agent is thinking.
+ * Real-time Agent Thinking & Execution State
  */
 export function TypingIndicator() {
   return (
-    <div className="typing-indicator">
-      <div className="typing-bubble">
-        <span className="typing-dot" />
-        <span className="typing-dot" />
-        <span className="typing-dot" />
+    <div className="dsh-thinking-container animate-fade-in">
+      <div className="dsh-deep-diving-status">
+        <span>Agent synthesizing response...</span>
+        <span className="diving-pulse-dot" />
       </div>
     </div>
   );

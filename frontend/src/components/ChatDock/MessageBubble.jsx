@@ -1,76 +1,155 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Markdown from 'react-markdown';
-import { ApprovalCard } from '../ApprovalCard/ApprovalCard';
+import { 
+  ShieldAlert, 
+  Sparkles, 
+  Terminal, 
+  FileEdit, 
+  CheckCircle2, 
+  Copy, 
+  Check
+} from 'lucide-react';
+import { useChat } from '../../context/ChatContext';
+import { useHealth } from '../../context/HealthContext';
 import './MessageBubble.css';
 
 /**
- * Renders a single chat message — user or agent.
- * Agent messages render markdown; user messages are plain text.
- * Also renders inline tool approval requests with risk analysis.
+ * DeepSeek Harness Style Message Renderer
  */
-export function MessageBubble({ message, onApprove, onDeny }) {
+export function MessageBubble({ message }) {
+  const { openOverview } = useChat();
+  const { modelName, isConnected } = useHealth();
+  const [copied, setCopied] = useState(false);
+
   const isUser = message.role === 'user';
   const isError = message.isError;
   const approval = message.approvalRequest;
 
+  const dynamicModel = message.model || modelName || (isConnected ? 'Poseidon Agent' : 'Connecting...');
   const timeStr = formatRelativeTime(message.timestamp);
 
-  return (
-    <div className={`message-bubble ${isUser ? 'message-user' : 'message-agent'} ${isError ? 'message-error' : ''}`}>
-      <div className="message-content">
-        {isUser ? (
-          <p>{message.content}</p>
-        ) : (
-          <>
-            {message.content && (
-              <Markdown
-                components={{
-                  // Custom code styling
-                  code({ className = '', children, ...props }) {
-                    return <code className={`inline-code ${className}`.trim()} {...props}>{children}</code>;
-                  },
-                  pre({ children, ...props }) {
-                    return (
-                      <pre className="code-block" {...props}>
-                        {children}
-                      </pre>
-                    );
-                  },
-                  // Open links in new tab
-                  a({ children, ...props }) {
-                    return <a target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
-                  },
-                }}
-              >
-                {message.content}
-              </Markdown>
-            )}
+  const handleCopy = () => {
+    if (!message.content) return;
+    navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
-            {/* Inline Tool Approval Card */}
-            {approval && (
-              <ApprovalCard
-                approvalId={approval.id || message.runId}
-                toolName={approval.tool}
-                arguments={approval.arguments}
-                diff={approval.diff}
-                dangerousParams={approval.dangerous_params}
-                warnings={approval.warnings}
-                riskLevel={approval.risk_level}
-                isTainted={approval.is_tainted}
-                onApprove={onApprove}
-                onDeny={onDeny}
-              />
-            )}
-          </>
-        )}
+  const handleOpenSecurity = () => {
+    openOverview('security');
+  };
+
+  if (isUser) {
+    return (
+      <div className="user-message-row animate-fade-in">
+        <div className="user-message-container">
+          <div className="user-pill-card">
+            <p className="user-text-content">{message.content}</p>
+          </div>
+          <div className="user-action-bar">
+            <button 
+              className="user-copy-btn" 
+              onClick={handleCopy}
+              title={copied ? "Copied!" : "Copy message"}
+              aria-label="Copy message"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          </div>
+        </div>
       </div>
+    );
+  }
 
-      <div className="message-meta">
-        <span className="message-time">{timeStr}</span>
-        {message.runId && (
-          <span className="message-run-id" title={`Run ID: ${message.runId}`}>
-            {message.runId.slice(0, 8)}
-          </span>
+  return (
+    <div className={`agent-message-row animate-fade-in ${isError ? 'is-error' : ''}`}>
+      <div className="agent-message-container">
+        {/* Model & Meta Tag Row */}
+        <div className="agent-model-meta-row">
+          <div className="gemini-model-badge" title={`Active Model: ${dynamicModel}`}>
+            <Sparkles size={12} className="sparkle-icon" />
+            <span className="gemini-model-name">{dynamicModel}</span>
+          </div>
+
+          <div className="agent-meta-tags">
+            {message.runId && (
+              <span className="message-run-tag" title={`Run ID: ${message.runId}`}>
+                run:{message.runId.slice(0, 8)}
+              </span>
+            )}
+            {timeStr && <span className="message-time-tag">{timeStr}</span>}
+          </div>
+        </div>
+
+        {/* Agent Markdown Content */}
+        {message.content && (
+          <div className="agent-markdown-body">
+            <Markdown
+              components={{
+                code({ className = '', children, ...props }) {
+                  return <code className={`inline-code ${className}`.trim()} {...props}>{children}</code>;
+                },
+                pre({ children, ...props }) {
+                  return (
+                    <pre className="code-block" {...props}>
+                      {children}
+                    </pre>
+                  );
+                },
+                a({ children, ...props }) {
+                  return <a target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
+                },
+              }}
+            >
+              {message.content}
+            </Markdown>
+          </div>
+        )}
+
+        {/* Structured Tool Call Execution Cards */}
+        {message.toolCalls && message.toolCalls.map((tc, idx) => (
+          <div key={idx} className="tool-execution-block">
+            <div className="tool-block-header">
+              <div className="tool-block-title">
+                {tc.name === 'bash' ? (
+                  <Terminal size={13} className="tool-block-icon" />
+                ) : (
+                  <FileEdit size={13} className="tool-block-icon" />
+                )}
+                <span className="tool-name-label">{tc.name}</span>
+              </div>
+              <span className={`tool-status-pill ${tc.status?.toLowerCase() || 'completed'}`}>
+                <CheckCircle2 size={11} />
+                <span>{tc.status || 'Executed'}</span>
+              </span>
+            </div>
+            <div className="tool-block-body">
+              {tc.command && <div className="tool-command-line"><code>{tc.command}</code></div>}
+              {tc.details && <div className="tool-desc-text">{tc.details}</div>}
+              {tc.meta && <div className="tool-meta-text">{tc.meta}</div>}
+            </div>
+          </div>
+        ))}
+
+        {/* Inline Tool Approval Gate Callout */}
+        {approval && (
+          <div className={`inline-approval-callout risk-${approval.risk_level || 'medium'}`}>
+            <div className="callout-header">
+              <ShieldAlert size={14} className="callout-icon" />
+              <span className="callout-title">Tool Approval Required: <strong>{approval.tool}</strong></span>
+              <span className={`callout-risk-tag ${approval.risk_level || 'medium'}`}>
+                {approval.risk_level?.toUpperCase()} RISK
+              </span>
+            </div>
+            <div className="callout-details">
+              <p className="callout-sub">
+                Operator verification required before executing side-effect tool action.
+              </p>
+              <button className="callout-review-btn" onClick={handleOpenSecurity}>
+                Inspect Diff &amp; Review in Security Gate →
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -82,7 +161,6 @@ export function MessageBubble({ message, onApprove, onDeny }) {
  */
 function formatRelativeTime(timestamp) {
   if (!timestamp) return '';
-
   const now = Date.now();
   const then = new Date(timestamp).getTime();
   const diffSec = Math.floor((now - then) / 1000);

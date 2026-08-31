@@ -1,0 +1,336 @@
+/* ── Left History Drawer (Slide-over) ── */
+.history-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 320px;
+  max-width: 100vw;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  box-shadow: var(--shadow-popover);
+  transform: translateX(-100%);
+  transition: transform var(--ease-standard);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-drawer.open {
+  transform: translateX(0);
+}
+
+/* ── Header ── */
+.history-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.history-icon {
+  color: var(--accent-primary);
+}
+
+.history-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--ease-fast);
+}
+
+.history-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* New Chat Button */
+.history-new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ease-fast);
+}
+
+.history-new-chat-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Search Bar */
+.history-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.history-search-input {
+  width: 100%;
+  padding: 5px 28px 5px 28px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color var(--ease-fast);
+}
+
+.history-search-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+/* ── Session List ── */
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 14px;
+  color: var(--text-disabled);
+  text-align: center;
+}
+
+.empty-icon {
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 0.75rem;
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--text-tertiary);
+}
+
+/* ── Date Groups ── */
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.history-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0 4px;
+  letter-spacing: 0.04em;
+}
+
+.history-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Item */
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--ease-fast);
+  position: relative;
+}
+
+.history-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+}
+
+.history-item.active {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.item-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.history-item.active .item-icon {
+  color: var(--accent-primary);
+}
+
+.item-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.item-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+}
+
+.item-meta {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-tertiary);
+}
+
+.item-rename-input {
+  width: 100%;
+  background: var(--bg-canvas);
+  border: 1px solid var(--accent-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  outline: none;
+}
+
+/* Actions on Hover */
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--ease-fast);
+}
+
+.history-item:hover .item-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--ease-fast);
+}
+
+.action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.action-btn.delete-btn:hover {
+  color: var(--danger);
+}
+
+.action-btn.save-btn {
+  color: var(--success);
+}
+
+/* ── Footer ── */
+.history-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.history-clear-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ease-fast);
+}
+
+.history-clear-all-btn:hover {
+  background: var(--danger-subtle);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}

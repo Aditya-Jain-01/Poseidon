@@ -3,7 +3,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px 0;
+  padding: 8px 0;
   user-select: none;
 }
 
@@ -16,104 +16,105 @@
 
 /* Common Rectangles */
 .arch-rect {
-  fill: var(--panel);
-  stroke: var(--line);
-  stroke-width: 1.5;
-  transition: all 0.25s ease;
+  fill: var(--bg-surface);
+  stroke: var(--border-default);
+  stroke-width: 1;
+  transition: all var(--ease-fast);
 }
 
 .node-harness {
-  fill: rgba(17, 26, 48, 0.45);
-  stroke: var(--line);
-  stroke-dasharray: 6 4;
+  fill: var(--bg-canvas);
+  stroke: var(--border-strong);
+  stroke-dasharray: 4 3;
 }
 
 .node-inner {
-  fill: var(--panel-2);
-  stroke: var(--line);
+  fill: var(--bg-elevated);
+  stroke: var(--border-default);
 }
 
 .node-gateway {
-  fill: var(--panel);
-  stroke: var(--accent);
-  stroke-width: 1.5;
+  fill: var(--bg-surface);
+  stroke: var(--border-strong);
+  stroke-width: 1;
 }
 
 .node-memory {
-  fill: var(--panel-2);
-  stroke: var(--line-soft);
+  fill: var(--bg-elevated);
+  stroke: var(--border-subtle);
 }
 
 .node-ops {
-  fill: rgba(13, 21, 38, 0.6);
-  stroke: var(--line-soft);
+  fill: var(--bg-surface);
+  stroke: var(--border-subtle);
 }
 
 .node-summarizer {
-  fill: var(--panel-2);
-  stroke: var(--line-soft);
+  fill: var(--bg-elevated);
+  stroke: var(--border-subtle);
 }
 
 /* Typography in SVG */
 .arch-title {
   font-family: var(--font-heading);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  fill: var(--ink);
-  letter-spacing: 0.5px;
+  fill: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .node-title-gateway {
-  fill: var(--accent);
-  font-size: 14px;
+  fill: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .arch-subtitle {
   font-family: var(--font-mono);
-  font-size: 11px;
-  fill: var(--muted);
+  font-size: 10px;
+  fill: var(--text-secondary);
 }
 
 .arch-group-title {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  fill: var(--muted-dim);
-  letter-spacing: 1px;
+  fill: var(--text-tertiary);
+  letter-spacing: 0.5px;
 }
 
 .arch-badge {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 8.5px;
   fill: var(--teal);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
 }
 
 .arch-guardrail-text {
   font-family: var(--font-mono);
-  font-size: 10px;
-  fill: var(--muted-dim);
+  font-size: 9.5px;
+  fill: var(--text-tertiary);
 }
 
 .arch-tool-denied {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   fill: var(--danger);
 }
 
 .arch-strikethrough {
   stroke: var(--danger);
-  stroke-width: 1.5;
+  stroke-width: 1;
 }
 
 /* Connection Lines */
 .arch-line {
-  stroke: var(--line);
-  stroke-width: 1.5;
+  stroke: var(--border-strong);
+  stroke-width: 1;
 }
 
 .line-event {
-  stroke: var(--accent);
+  stroke: var(--accent-primary);
 }
 
 .line-reply {
@@ -121,20 +122,20 @@
 }
 
 .line-bidirectional {
-  stroke: var(--muted-dim);
+  stroke: var(--border-strong);
 }
 
 .line-down {
-  stroke: var(--line);
+  stroke: var(--border-strong);
 }
 
 .arch-edge-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
 }
 
 .arch-edge-label.accent {
-  fill: var(--accent);
+  fill: var(--accent-primary);
 }
 
 .arch-edge-label.teal {
@@ -143,11 +144,46 @@
 
 /* Node Hover and Active States */
 .arch-node:hover .arch-rect {
-  stroke: var(--accent);
-  fill: var(--panel-hover);
+  stroke: var(--border-strong);
+  fill: var(--bg-hover);
+  cursor: pointer;
 }
 
 .arch-node.active .arch-rect {
-  stroke: var(--accent);
-  filter: drop-shadow(0 0 8px rgba(124, 156, 255, 0.35));
+  stroke: var(--accent-primary);
+  fill: var(--accent-subtle);
+  stroke-width: 1.5;
+}
+
+/* Specific Active Node Highlights */
+.arch-box-gateway.active .arch-rect {
+  stroke: var(--accent-primary);
+  fill: var(--accent-subtle);
+}
+
+.arch-box-agent.active .arch-rect {
+  stroke: var(--accent-primary);
+  fill: var(--accent-subtle);
+}
+
+.arch-box-tools.active .arch-rect {
+  stroke: var(--success);
+  fill: var(--success-subtle);
+}
+
+.arch-box-procedural.active .arch-rect,
+.arch-box-semantic.active .arch-rect,
+.arch-box-episodic.active .arch-rect {
+  stroke: var(--teal);
+  fill: var(--teal-subtle);
+}
+
+.arch-box-llmops.active .arch-rect {
+  stroke: var(--danger);
+  fill: var(--danger-subtle);
+}
+
+.arch-box-summarizer.active .arch-rect {
+  stroke: var(--warning);
+  fill: var(--warning-subtle);
 }

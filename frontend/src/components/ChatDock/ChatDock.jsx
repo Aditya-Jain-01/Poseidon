@@ -1,133 +1,214 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Plus, Maximize2, Minimize2, ChevronsLeft, ChevronsRight, RotateCcw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Download, Cpu, ShieldCheck, Activity, Layers, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
+import TrajectoryView from '../TrajectoryView/TrajectoryView';
+import ApprovalCard from '../ApprovalCard/ApprovalCard';
 import './ChatDock.css';
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 /**
- * Persistent chat panel docked to the right side of the app.
- * Supports interactive dragging resize, full width toggle, and state persistence.
+ * Centered Chat, Trajectory & Security Canvas view
  */
 export function ChatDock() {
   const {
+    sessions,
     messages,
     isLoading,
     sendMessage,
-    clearChat,
-    dockWidth,
-    setDockWidth,
-    isExpanded,
-    toggleExpand,
-    toggleDock
+    activeSessionId,
+    isOverviewOpen,
+    toggleOverview,
   } = useChat();
 
+  const greeting = getGreeting();
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'trajectory' | 'security'
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
 
-  // Auto-scroll to bottom when new messages arrive
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const sessionTitle = activeSession?.title || 'New Session';
+
+  // Live approval requests from current messages
+  const liveApprovalMsg = messages?.slice().reverse().find((m) => m.approvalRequest);
+  const liveApproval = liveApprovalMsg?.approvalRequest;
+
+  // Reset tab to chat when active session changes
   useEffect(() => {
-    if (messagesEndRef.current) {
+    setActiveTab('chat');
+  }, [activeSessionId]);
+
+  // Auto-scroll to bottom when new messages arrive in chat tab
+  useEffect(() => {
+    if (activeTab === 'chat' && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, activeTab]);
 
-  // Handle Dragging Resize on the Left Handle
-  const handleMouseDown = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const isEmpty = messages.length === 0;
 
-    const handleMouseMove = (moveEvent) => {
-      const newWidth = window.innerWidth - moveEvent.clientX;
-      setDockWidth(newWidth);
+  const handleExportSessionLog = () => {
+    if (!activeSession) return;
+    const exportData = {
+      sessionId: activeSession.id,
+      title: activeSession.title,
+      createdAt: activeSession.createdAt,
+      messages: activeSession.messages,
     };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'default';
-      document.body.style.userSelect = 'auto';
-    };
-
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  }, [setDockWidth]);
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session-${activeSession.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className={`chat-dock ${isDragging ? 'is-resizing' : ''}`}>
-      {/* Left Resize Drag Handle */}
-      <div
-        className="chat-dock-resize-handle"
-        onMouseDown={handleMouseDown}
-        onDoubleClick={() => setDockWidth(dockWidth > 550 ? 420 : 650)}
-        title="Drag to resize chat panel (Double-click to toggle width)"
-      >
-        <div className="resize-grip-line" />
-      </div>
+    <div className={`chat-canvas ${isEmpty && activeTab === 'chat' ? 'is-empty-hero' : ''}`}>
+      {/* Subheader with Chat, Trajectory, Security Gate, and Topology tabs */}
+      {(!isEmpty || activeTab !== 'chat') && (
+        <div className="chat-canvas-subheader">
+          <div className="subheader-left">
+            <div className="subheader-title-row">
+              <span className="session-heading-title">{sessionTitle}</span>
+              <span className="session-mode-badge">
+                <Cpu size={12} className="mode-badge-icon" />
+                <span>Standard mode</span>
+              </span>
+            </div>
 
-      {/* Header */}
-      <div className="chat-dock-header">
-        <div className="chat-dock-header-left">
-          <h3 className="chat-dock-title">Chat</h3>
-          <span className="chat-dock-size-indicator mono">
-            {isExpanded ? 'Full' : `${Math.round(dockWidth)}px`}
-          </span>
-        </div>
-
-        <div className="chat-dock-actions">
-          {/* Quick Expand / Maximize Toggle */}
-          <button
-            className={`chat-dock-action-btn ${isExpanded ? 'active' : ''}`}
-            onClick={toggleExpand}
-            title={isExpanded ? 'Collapse to standard width' : 'Expand chat width'}
-            aria-label="Expand chat"
-          >
-            {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            <span>{isExpanded ? 'Compact' : 'Expand'}</span>
-          </button>
-
-          {/* New Chat Button */}
-          <button
-            className="chat-dock-action-btn"
-            onClick={clearChat}
-            title="Start a new chat"
-            aria-label="Start new chat"
-          >
-            <Plus size={14} />
-            <span>New</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Message List */}
-      <div className="chat-dock-messages" ref={messageListRef}>
-        {messages.length === 0 ? (
-          <div className="chat-dock-empty">
-            <div className="chat-dock-empty-icon">🔱</div>
-            <p className="chat-dock-empty-title">Welcome to Poseidon</p>
-            <p className="chat-dock-empty-sub">
-              Type a message to start a conversation with your agent. Drag the left border to expand this panel.
-            </p>
+            <div className="subheader-tabs-row">
+              <button 
+                className={`subheader-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
+                onClick={() => setActiveTab('chat')}
+              >
+                Chat
+              </button>
+              <button 
+                className={`subheader-tab-btn ${activeTab === 'trajectory' ? 'active' : ''}`}
+                onClick={() => setActiveTab('trajectory')}
+              >
+                Trajectory
+              </button>
+              <button 
+                className={`subheader-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
+                onClick={() => setActiveTab('security')}
+              >
+                Security Gate
+              </button>
+              <button 
+                className={`subheader-tab-btn topology-side-btn ${isOverviewOpen ? 'active' : ''}`}
+                onClick={toggleOverview}
+                title="Toggle Architecture &amp; Topology CAD in right side window"
+              >
+                Topology
+              </button>
+            </div>
           </div>
-        ) : (
-          messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))
-        )}
 
-        {isLoading && <TypingIndicator />}
+          <div className="subheader-right">
+            <button 
+              className="session-log-btn"
+              onClick={handleExportSessionLog}
+              title="Export session execution log"
+            >
+              <span>Session log</span>
+              <Download size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
-        {/* Scroll anchor */}
-        <div ref={messagesEndRef} />
-      </div>
+      {/* Main Content Area: Chat, Trajectory, or Security Gate */}
+      {activeTab === 'trajectory' ? (
+        <TrajectoryView messages={messages} sessionTitle={sessionTitle} />
+      ) : activeTab === 'security' ? (
+        /* Security Gate & Taint Inspector View */
+        <div className="workspace-security-view animate-fade-in">
+          <div className="security-view-header">
+            <div className="security-header-info">
+              <span className="security-title">Security Gate &amp; Taint Inspector</span>
+              <span className="security-subtitle">Human-in-the-loop parameter verification and untrusted origin taint tracking</span>
+            </div>
+          </div>
 
-      {/* Input */}
-      <MessageInput onSend={sendMessage} disabled={isLoading} />
+          <div className="security-cards-container">
+            {liveApproval ? (
+              <div className="live-approval-section">
+                <div className="section-gate-badge">
+                  <ShieldAlert size={14} />
+                  <span>ACTIVE LIVE APPROVAL REQUIRED</span>
+                </div>
+                <ApprovalCard
+                  approvalId={liveApproval.id || 'live-gate-1'}
+                  toolName={liveApproval.tool}
+                  arguments={liveApproval.args || {}}
+                  diff={liveApproval.diff || {}}
+                  dangerousParams={liveApproval.dangerous_params || []}
+                  warnings={liveApproval.warnings || ['Live tool execution approval required before dispatch.']}
+                  riskLevel={liveApproval.risk_level || 'high'}
+                  isTainted={liveApproval.is_tainted || false}
+                  onApprove={() => alert('Tool action approved.')}
+                  onDeny={() => alert('Tool action denied.')}
+                />
+              </div>
+            ) : (
+              <div className="empty-security-gate-view">
+                <ShieldCheck size={38} className="empty-shield-icon" />
+                <h3 className="empty-security-title">No security evaluations pending</h3>
+                <p className="empty-security-desc">
+                  Human-in-the-loop security gate is armed. Tainted inputs, high-risk operations, or tool parameter overrides will generate verification cards here.
+                </p>
+                <div className="security-standby-pill">
+                  <span className="standby-dot" />
+                  <span>Gate Armed · 0 Taint Alerts</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : isEmpty ? (
+        /* Empty Execution Workspace Hero */
+        <div className="chat-hero-container animate-fade-in">
+          {/* Subtle Ocean Atmospheric Glow Layer */}
+          <div className="ocean-depth-aura" aria-hidden="true" />
+
+          <h1 className="hero-title">{greeting}</h1>
+
+          {/* Centered Command Input Bar */}
+          <div className="hero-input-wrapper">
+            <MessageInput onSend={sendMessage} disabled={isLoading} isHero={true} />
+          </div>
+        </div>
+      ) : (
+        /* Active Chat Message Stream */
+        <>
+          {/* Message List */}
+          <div className="chat-canvas-messages" ref={messageListRef}>
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+
+            {isLoading && <TypingIndicator />}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Docked Command Input Bar */}
+          <div className="chat-canvas-input-wrapper">
+            <MessageInput onSend={sendMessage} disabled={isLoading} isHero={false} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
