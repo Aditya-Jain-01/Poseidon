@@ -1,4 +1,4 @@
-/* ── User Message Row (DeepSeek Harness Right-Aligned Pill) ── */
+/* ── User Message Row (Poseidon Right-Aligned Pill) ── */
 .user-message-row {
   display: flex;
   justify-content: flex-end;
@@ -63,7 +63,7 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* ── Agent Message Row (DeepSeek Harness Clean Direct Flow) ── */
+/* ── Agent Message Row (Poseidon Clean Direct Flow) ── */
 .agent-message-row {
   display: flex;
   flex-direction: column;

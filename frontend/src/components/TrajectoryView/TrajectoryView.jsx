@@ -17,7 +17,7 @@ import {
 import './TrajectoryView.css';
 
 /**
- * High-Fidelity DeepSeek Harness Trajectory View
+ * High-Fidelity Poseidon Trajectory View
  * Dynamic Execution Waterfall Timeline, Event Ledger, and Multi-tab Inspector.
  */
 export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) {
@@ -352,7 +352,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
                   </div>
                 </div>
 
-                {/* Inspector Tabs (DeepSeek Reference: Summary | Payload | Result | Schema | Timing) */}
+                {/* Inspector Tabs: Summary | Payload | Result | Schema | Timing */}
                 <div className="inspector-tabs-nav">
                   <button
                     className={`inspector-tab-item ${inspectorTab === 'summary' ? 'active' : ''}`}

@@ -4,7 +4,7 @@ import { useHealth } from '../../context/HealthContext';
 import './MessageInput.css';
 
 /**
- * Modern Developer Prompt Box (DeepSeek Harness / Clean Workspace Style)
+ * Modern Developer Prompt Box (Clean Workspace Style)
  */
 export function MessageInput({ onSend, disabled = false, isHero = false }) {
   const { modelName, isConnected } = useHealth();

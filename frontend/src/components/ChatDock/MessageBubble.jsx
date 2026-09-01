@@ -14,7 +14,7 @@ import { useHealth } from '../../context/HealthContext';
 import './MessageBubble.css';
 
 /**
- * DeepSeek Harness Style Message Renderer
+ * Poseidon Message Renderer
  */
 export function MessageBubble({ message }) {
   const { openOverview } = useChat();

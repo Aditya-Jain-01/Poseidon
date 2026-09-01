@@ -89,7 +89,7 @@
   z-index: 1;
 }
 
-/* ── Active Conversation Flow (DeepSeek Harness Style) ── */
+/* ── Active Conversation Flow (Poseidon Style) ── */
 .chat-canvas-subheader {
   display: flex;
   align-items: center;

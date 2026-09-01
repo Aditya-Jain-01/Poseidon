@@ -82,8 +82,8 @@ export function Gateway() {
   const tabs = [
     { key: 'all', label: 'All Channels', count: displayMessages.length },
     { key: 'web', label: 'Web / CLI', count: displayMessages.length },
-    { key: 'telegram', label: 'Telegram (Sprint 4)', count: 0 },
-    { key: 'discord', label: 'Discord (Sprint 4)', count: 0 },
+    { key: 'telegram', label: 'Telegram (Planned)', count: 0 },
+    { key: 'discord', label: 'Discord (Planned)', count: 0 },
   ];
 
   const formatTimestamp = (isoString) => {
@@ -192,7 +192,7 @@ export function Gateway() {
                 }
                 subtitle={
                   activeTab === 'telegram' || activeTab === 'discord'
-                    ? 'This channel adapter is scheduled for Sprint 4 integration.'
+                    ? 'This channel adapter is planned for future integration.'
                     : 'Send prompts in Chat to record inbound and outbound API gateway telemetry.'
                 }
               />
