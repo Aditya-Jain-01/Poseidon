@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.orchestration.graph import run_agent
 from app.orchestration.state import InboundEvent
-from app.security.taint import is_channel_untrusted
+from app.security.taint import is_channel_untrusted, calculate_overall_risk
 from app.security.risk_analyzer import RiskAnalyzer
 
 
@@ -47,7 +47,8 @@ router = APIRouter()
 @router.post("/chat")
 async def chat(req: ChatRequest):
     text_lower = req.text.lower()
-    tainted = is_channel_untrusted(req.channel) or ("inject" in text_lower or "untrusted" in text_lower)
+    risk_info = calculate_overall_risk(req.channel, req.text)
+    tainted = risk_info["is_tainted"]
     event = InboundEvent(
         user_id=req.user_id,
         channel=req.channel,
@@ -55,7 +56,7 @@ async def chat(req: ChatRequest):
         text=req.text,
         timestamp=datetime.now(timezone.utc),
         is_tainted=tainted,
-        taint_sources=[req.channel] if tainted else [],
+        taint_sources=[req.channel] if is_channel_untrusted(req.channel) else (["content_risk"] if tainted else []),
     )
 
     run_id = str(uuid4())
