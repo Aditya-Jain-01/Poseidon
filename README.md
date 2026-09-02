@@ -57,38 +57,38 @@ Traditional LLM applications are ephemeral: context is wiped when a session term
 ```mermaid
 flowchart TD
     subgraph Inbound ["1. Gateway Layer"]
-        CLI["Web / CLI Adapter"] -->|Normalize| EV["InboundEvent Schema"]
+        CLI["Web / CLI Adapter"] -->|"Normalize"| EV["InboundEvent Schema"]
     end
 
     subgraph Assembly ["2. Context Hydration"]
         EV --> WM["Working Memory Assembler"]
-        PROC["Procedural Memory (*.SKILL.md)"] -.->|Playbooks| WM
-        SEM["Semantic Memory (FTS5 BM25)"] -.->|Top-k Facts| WM
-        EPIS["Episodic Memory (sqlite-vec)"] -.->|KNN + Recency| WM
+        PROC["Procedural Memory (*.SKILL.md)"] -.->|"Playbooks"| WM
+        SEM["Semantic Memory (FTS5 BM25)"] -.->|"Top-k Facts"| WM
+        EPIS["Episodic Memory (sqlite-vec)"] -.->|"KNN + Recency"| WM
         SP["System Prompt Template"] -.-> WM
     end
 
     subgraph Runtime ["3. Governed Execution Loop"]
         WM --> LG["LangGraph Orchestration Engine"]
         LG --> QA["QA Agent Loop"]
-        QA -->|Tool Invocation| RISK{"Risk Analyzer Gate"}
-        RISK -->|Low Risk| EXEC["Execute Tool"]
-        RISK -->|High Risk| HITL["Human Approval Required"]
+        QA -->|"Tool Invocation"| RISK{"Risk Analyzer Gate"}
+        RISK -->|"Low Risk"| EXEC["Execute Tool"]
+        RISK -->|"High Risk"| HITL["Human Approval Required"]
         EXEC --> QA
         HITL --> QA
     end
 
     subgraph SecurityOut ["4. Output Governance"]
         QA --> DLP["Outbound DLP Firewall"]
-        DLP -->|Sanitized Stream| RES["Client Gateway Response"]
-        QA -.->|Raw Turn Logs| EPIS_STORE[("Episodic Store (state.db)")]
+        DLP -->|"Sanitized Stream"| RES["Client Gateway Response"]
+        QA -.->|"Raw Turn Logs"| EPIS_STORE[("Episodic Store: state.db")]
     end
 
     subgraph Consolidation ["5. Background Consolidation"]
-        EPIS_STORE -->|Threshold Trigger (N chats)| SUMM["Summarizer Agent"]
+        EPIS_STORE -->|"Threshold Trigger: N chats"| SUMM["Summarizer Agent"]
         SUMM --> ADV{"Anti-Poisoning Reviewer"}
-        ADV -->|Safe Facts| SEM_STORE[("Semantic Store (FTS5 + MEMORY.md)")]
-        ADV -->|Safe Skills| PROC_STORE["Procedural Store (memory-store/skills)"]
+        ADV -->|"Safe Facts"| SEM_STORE[("Semantic Store: FTS5 + MEMORY.md")]
+        ADV -->|"Safe Skills"| PROC_STORE["Procedural Store: memory-store/skills"]
     end
 ```
 
