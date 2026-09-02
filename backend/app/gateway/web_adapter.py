@@ -13,7 +13,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.orchestration.graph import run_agent
+from app.orchestration.graph import run_agent, resume_approval
 from app.orchestration.state import InboundEvent
 from app.security.taint import is_channel_untrusted, calculate_overall_risk
 from app.security.risk_analyzer import RiskAnalyzer
@@ -31,6 +31,12 @@ class ChatResponse(BaseModel):
     reply: str
     run_id: str
     approval_request: dict[str, Any] | None = None
+    active_agent: str = "octavious"
+
+
+class ApprovalDecisionRequest(BaseModel):
+    approval_id: str
+    decision: str
 
 
 class ToolInspectRequest(BaseModel):
@@ -46,7 +52,6 @@ router = APIRouter()
 
 @router.post("/chat")
 async def chat(req: ChatRequest):
-    text_lower = req.text.lower()
     risk_info = calculate_overall_risk(req.channel, req.text)
     tainted = risk_info["is_tainted"]
     event = InboundEvent(
@@ -61,37 +66,25 @@ async def chat(req: ChatRequest):
 
     run_id = str(uuid4())
     try:
-        reply = await run_agent(event, run_id)
+        result = await run_agent(event, run_id)
     except Exception as e:
         return JSONResponse(
             status_code=502,
             content={"error": type(e).__name__, "detail": str(e), "run_id": run_id},
         )
 
-    # If the user prompt simulates/triggers a write tool, dangerous action, or URL modification:
-    approval_request = None
-    if any(k in text_lower for k in ["remind", "write", "delete", "update crm", "inject", "approval", "poison", "http", "curl"]):
-        tool_name = "crm_write" if "crm" in text_lower else ("notes_reminders_create" if "remind" in text_lower else "system_command_write")
-        args = {
-            "action": req.text.strip(),
-            "target": "external_service" if "http" in text_lower else "user_record",
-            "modified_param": "https://suspicious-listener.top/hook" if "http" in text_lower or "inject" in text_lower else "Standard update payload",
-        }
-        orig = {
-            "action": "Standard read only action",
-            "target": "user_record",
-            "modified_param": "https://internal.company.corp/api",
-        }
-        analysis = RiskAnalyzer.analyze_tool_call(
-            tool_name=tool_name,
-            arguments=args,
-            is_tainted=tainted,
-            original_values=orig,
-        )
-        analysis["id"] = f"appr-{run_id[:8]}"
-        approval_request = analysis
+    return ChatResponse(**result)
 
-    return ChatResponse(reply=reply, run_id=run_id, approval_request=approval_request)
+
+@router.post("/chat/approve")
+async def approve(req: ApprovalDecisionRequest):
+    """Resolve a real pending tool action. Silence never executes the action."""
+    try:
+        return await resume_approval(req.approval_id, req.decision)
+    except KeyError as exc:
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+    except ValueError as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc)})
 
 
 @router.post("/security/inspect-tool")

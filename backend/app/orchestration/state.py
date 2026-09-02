@@ -42,3 +42,7 @@ class AgentState(TypedDict):
     is_tainted: bool
     taint_sources: list[str]
     pending_approvals: list[dict]
+    active_agent: str
+    tool_results: list[dict]
+    approval_status: str
+    current_tool_call: dict | None
