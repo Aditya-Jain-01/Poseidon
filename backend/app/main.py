@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.llm_providers import llm_provider
 from app.gateway.web_adapter import router as web_router
 from app.gateway.memory_adapter import router as memory_router
 from app.gateway.agents_adapter import router as agents_router
@@ -36,7 +37,13 @@ app.include_router(trajectory_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": settings.poseidon_model}
+    primary = llm_provider.get_agent_resolved_config("octavious")
+    return {
+        "status": "ok",
+        "model": primary["model"],
+        "provider": primary["preset"],
+        "configured": primary["has_api_key"],
+    }
 
 
 # Serve built frontend if dist directory exists

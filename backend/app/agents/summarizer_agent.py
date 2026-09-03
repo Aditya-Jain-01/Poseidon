@@ -11,9 +11,7 @@ Sprint 2 (Person C — Stage 5):
 import json
 import re
 from typing import Any
-from openai import AsyncOpenAI
-
-from app.config import settings
+from app.llm_providers import llm_provider
 from app.memory.semantic_store import semantic_store
 from app.memory.procedural_store import procedural_store
 from app.memory.episodic_store import episodic_store
@@ -51,13 +49,6 @@ You MUST reply ONLY with a valid JSON object matching this schema:
   ]
 }
 """
-
-
-def _get_client() -> AsyncOpenAI:
-    return AsyncOpenAI(
-        api_key=settings.openrouter_api_key,
-        base_url=settings.poseidon_base_url,
-    )
 
 
 def _format_conversation(events: list[dict[str, Any]]) -> str:
@@ -121,16 +112,17 @@ async def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         f"Output your JSON response below:"
     )
 
-    client = _get_client()
+    client = llm_provider.get_client("octavious")
+    model = llm_provider.get_model("octavious")
 
     try:
         response = await client.chat.completions.create(
-            model=settings.poseidon_model,
+            model=model,
             messages=[
                 {"role": "system", "content": SUMMARIZER_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            response_format={"type": "json_object"} if "openai" in settings.poseidon_base_url else None,
+            response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content or ""
         return _extract_json(content)

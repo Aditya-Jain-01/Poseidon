@@ -11,9 +11,10 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     # LLM provider & Multi-Agent keys
     openrouter_api_key: str = Field(default="", description="OpenRouter API key")
+    nvidia_api_key: str = Field(default="", description="NVIDIA NIM API key")
     kraken_api_key: str = Field(default="", description="Kraken / OpenAI subscription API key")
-    poseidon_model: str = Field("google/gemma-4-31b-it:free", description="Default fallback model identifier")
-    poseidon_base_url: str = Field("https://openrouter.ai/api/v1", description="Default fallback OpenAI-compatible base URL")
+    poseidon_model: str = Field("nvidia/nemotron-3-ultra-550b-a55b", description="Default fallback model identifier")
+    poseidon_base_url: str = Field("https://integrate.api.nvidia.com/v1", description="Default fallback OpenAI-compatible base URL")
 
     # Server
     poseidon_host: str = Field("127.0.0.1")

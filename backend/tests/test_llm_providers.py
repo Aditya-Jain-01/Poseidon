@@ -48,7 +48,8 @@ class TestLLMProviders(unittest.TestCase):
 
         nereus_conf = self.provider.get_agent_resolved_config("nereus")
         self.assertEqual(nereus_conf["preset"], "cloud_free")
-        self.assertIn("openrouter.ai", nereus_conf["base_url"])
+        self.assertEqual(nereus_conf["base_url"], "https://integrate.api.nvidia.com/v1")
+        self.assertEqual(nereus_conf["model"], "nvidia/nemotron-3-ultra-550b-a55b")
 
     def test_update_agent_provider(self):
         """Verify dynamically reassigning an agent's provider."""

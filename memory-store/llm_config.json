@@ -6,9 +6,9 @@
       "default_model": "llama3.2"
     },
     "cloud_free": {
-      "base_url": "https://openrouter.ai/api/v1",
-      "api_key_env": "OPENROUTER_API_KEY",
-      "default_model": "google/gemma-4-31b-it:free"
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "api_key_env": "NVIDIA_API_KEY",
+      "default_model": "nvidia/nemotron-3-ultra-550b-a55b"
     },
     "cloud_paid": {
       "base_url": "https://api.openai.com/v1",
@@ -18,7 +18,7 @@
   },
   "agent_overrides": {
     "octavious": {
-      "preset": "local"
+      "preset": "cloud_free"
     },
     "nereus": {
       "preset": "cloud_free"

@@ -24,9 +24,9 @@ DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
       "default_model": "llama3.2"
     },
     "cloud_free": {
-      "base_url": "https://openrouter.ai/api/v1",
-      "api_key_env": "OPENROUTER_API_KEY",
-      "default_model": "google/gemma-4-31b-it:free"
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "api_key_env": "NVIDIA_API_KEY",
+      "default_model": "nvidia/nemotron-3-ultra-550b-a55b"
     },
     "cloud_paid": {
       "base_url": "https://api.openai.com/v1",
@@ -34,9 +34,9 @@ DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
       "default_model": "gpt-5.4-medium"
     },
     "custom": {
-      "base_url": "https://openrouter.ai/api/v1",
+      "base_url": "https://integrate.api.nvidia.com/v1",
       "api_key": "",
-      "default_model": "google/gemma-4-31b-it:free"
+      "default_model": "nvidia/nemotron-3-ultra-550b-a55b"
     }
 }
 
@@ -63,6 +63,8 @@ class LLMProvider:
             return ""
         if env_var_name == "OPENROUTER_API_KEY" and settings.openrouter_api_key:
             return settings.openrouter_api_key
+        if env_var_name == "NVIDIA_API_KEY" and settings.nvidia_api_key:
+            return settings.nvidia_api_key
         if env_var_name == "KRAKEN_API_KEY" and settings.kraken_api_key:
             return settings.kraken_api_key
         return os.environ.get(env_var_name, "")
@@ -122,10 +124,6 @@ class LLMProvider:
         # Fallback for local ollama
         if preset == "local" and not api_key:
             api_key = "ollama"
-
-        # Final cloud fallback if key missing
-        if not api_key and settings.openrouter_api_key:
-            api_key = settings.openrouter_api_key
 
         return {
             "agent_id": agent_id.lower(),

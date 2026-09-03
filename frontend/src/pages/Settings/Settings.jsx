@@ -35,7 +35,7 @@ const PRESET_COLORS = ['#39ff14', '#00bfff', '#ff4500', '#a855f7', '#f59e0b', '#
 
 const MODEL_PRESETS = [
   { id: 'local', label: 'Local (Ollama)', tag: '100% LOCAL', cost: 'Free' },
-  { id: 'cloud_free', label: 'Cloud Free (OpenRouter)', tag: 'FREE CLOUD', cost: 'Free' },
+  { id: 'cloud_free', label: 'Cloud Free (NVIDIA NIM)', tag: 'FREE CLOUD', cost: 'Free' },
   { id: 'cloud_paid', label: 'Cloud Paid (OpenAI/Codex)', tag: 'PAID TIER', cost: 'Subscription' },
   { id: 'custom', label: 'Custom Endpoint', tag: 'CUSTOM', cost: 'Custom' },
 ];
@@ -483,7 +483,7 @@ export function Settings() {
 
                       <td className="matrix-url">
                         <span className="url-text" title={resolved.base_url}>
-                          {resolved.base_url || 'https://openrouter.ai/api/v1'}
+                          {resolved.base_url || 'https://integrate.api.nvidia.com/v1'}
                         </span>
                       </td>
 
