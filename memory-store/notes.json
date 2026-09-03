@@ -1,0 +1,37 @@
+{
+  "notes": [
+    {
+      "id": "note-1",
+      "text": "Sprint 4 Milestone: Extensible Party of Agents architecture with drop-in *.soul.md files and multi-provider client dispatch."
+    },
+    {
+      "id": "note-2",
+      "text": "Architecture Decision: Pluggable router seam in backend/app/orchestration/router.py prepares for future Poseidon Master Orchestrator agent."
+    },
+    {
+      "id": "note-3",
+      "text": "Security Checklist: Human-in-the-loop approval gate must enforce parameter inspection and untrusted taint isolation before tool invocation."
+    },
+    {
+      "id": "note-4",
+      "text": "Kraken POC Guidelines: Prefer pragmatic and runnable code over perfection. Lead with code blocks, follow with execution rationale."
+    }
+  ],
+  "reminders": [
+    {
+      "id": "rem-1",
+      "text": "Review pull requests for Person A, Person B, and Person C merge into main",
+      "due_at": "2026-09-04T10:00:00Z"
+    },
+    {
+      "id": "rem-2",
+      "text": "Verify local Ollama service connectivity for Octavious agent runner",
+      "due_at": "2026-09-04T14:30:00Z"
+    },
+    {
+      "id": "rem-3",
+      "text": "Conduct end-to-end multi-agent test suite validation with pytest",
+      "due_at": "2026-09-05T09:00:00Z"
+    }
+  ]
+}

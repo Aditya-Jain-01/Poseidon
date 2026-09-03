@@ -1,0 +1,49 @@
+{
+  "contacts": [
+    {
+      "id": "crm-c1",
+      "name": "Alex Mercer",
+      "email": "alex.mercer@deepocean.io",
+      "phone": "+1-555-0192",
+      "company": "Deep Ocean Labs",
+      "role": "Lead Architect",
+      "notes": "Discussed distributed memory consolidation protocols and agent orchestration frameworks."
+    },
+    {
+      "id": "crm-c2",
+      "name": "Sarah Chen",
+      "email": "sarah.chen@abyssal.ai",
+      "phone": "+1-555-0481",
+      "company": "Abyssal Systems",
+      "role": "Head of Research",
+      "notes": "Primary contact for semantic search benchmarks and RAG evaluation pipelines."
+    },
+    {
+      "id": "crm-c3",
+      "name": "Marcus Vance",
+      "email": "marcus.vance@tridentsec.com",
+      "phone": "+1-555-0319",
+      "company": "Trident Security",
+      "role": "CISO",
+      "notes": "Security gate partner. Key stakeholder for human-in-the-loop tool approvals and DLP policies."
+    },
+    {
+      "id": "crm-c4",
+      "name": "Elena Rostova",
+      "email": "elena.r@nautilus-ventures.co",
+      "phone": "+1-555-0823",
+      "company": "Nautilus Ventures",
+      "role": "General Partner",
+      "notes": "Investor lead. Requested demonstration of Kraken autonomous POC code generation."
+    },
+    {
+      "id": "crm-c5",
+      "name": "Liam Thorne",
+      "email": "liam@poseidonharness.dev",
+      "phone": "+1-555-0914",
+      "company": "Poseidon Core Team",
+      "role": "Staff Engineer",
+      "notes": "Core contributor maintaining procedural memory store and tool execution loop."
+    }
+  ]
+}

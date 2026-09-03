@@ -173,6 +173,7 @@ export function ChatProvider({ children }) {
         content: data.reply,
         runId: data.run_id,
         approvalRequest: data.approval_request || null,
+        activeAgent: data.active_agent || 'octavious',
         timestamp: new Date().toISOString(),
       };
 

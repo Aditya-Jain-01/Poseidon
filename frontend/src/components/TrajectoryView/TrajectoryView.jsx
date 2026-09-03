@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Clock, 
   Layers, 
@@ -8,12 +8,14 @@ import {
   ShieldAlert,
   Copy, 
   Check, 
-  Code2,
+  Code2, 
   X,
   Sparkles,
   Info,
-  Calendar
+  Calendar,
+  Activity
 } from 'lucide-react';
+import { fetchTrajectory } from '../../api/agents';
 import './TrajectoryView.css';
 
 /**
@@ -23,9 +25,30 @@ import './TrajectoryView.css';
 export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [inspectorTab, setInspectorTab] = useState('summary'); // 'summary' | 'payload' | 'result' | 'schema' | 'timing'
+  const [inspectorTab, setInspectorTab] = useState('summary'); // 'summary' | 'payload' | 'result' | 'schema' | 'timing' | 'trace'
   const [copied, setCopied] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
+  const [backendTrajectoryMap, setBackendTrajectoryMap] = useState({});
+
+  // Poll / fetch real backend execution steps for any runs
+  useEffect(() => {
+    const runIds = messages
+      .map((m) => m.runId)
+      .filter((id) => Boolean(id) && !backendTrajectoryMap[id]);
+
+    if (runIds.length === 0) return;
+
+    runIds.forEach(async (rid) => {
+      try {
+        const res = await fetchTrajectory(rid);
+        if (res && res.steps) {
+          setBackendTrajectoryMap((prev) => ({ ...prev, [rid]: res.steps }));
+        }
+      } catch (err) {
+        // silent catch
+      }
+    });
+  }, [messages, backendTrajectoryMap]);
 
   // ── Construct Real Telemetry Ledger from Session Messages ──
   const events = useMemo(() => {
@@ -130,6 +153,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
             result: msg.content,
             schema: JSON.stringify({ model: msg.model || 'poseidon-runtime', run_id: msg.runId || null }, null, 2),
             runId: msg.runId,
+            backendSteps: msg.runId ? (backendTrajectoryMap[msg.runId] || []) : [],
             timestamp: timeStr,
             fullIso: fullIsoStr,
             duration: '320 ms',
@@ -142,7 +166,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
     });
 
     return list;
-  }, [messages]);
+  }, [messages, backendTrajectoryMap]);
 
   // Set default selected event to first real event if available
   const activeEventId = selectedEventId || (events.length > 0 ? events[0].id : null);
@@ -384,6 +408,14 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
                   >
                     Timing
                   </button>
+                  {selectedEvent.backendSteps && selectedEvent.backendSteps.length > 0 && (
+                    <button
+                      className={`inspector-tab-item ${inspectorTab === 'trace' ? 'active' : ''}`}
+                      onClick={() => setInspectorTab('trace')}
+                    >
+                      Backend Trace ({selectedEvent.backendSteps.length})
+                    </button>
+                  )}
                 </div>
 
                 {/* Inspector Body Content */}
@@ -438,6 +470,24 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
                       <div className="timing-row">
                         <span className="timing-label">Timing source</span>
                         <span className="timing-val">{selectedEvent.timingSource}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {inspectorTab === 'trace' && (
+                    <div className="inspector-trace-pane">
+                      <div className="trace-steps-ledger" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {selectedEvent.backendSteps.map((step, sIdx) => (
+                          <div key={sIdx} className="trace-step-card" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: '6px', padding: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                              <span style={{ color: 'var(--accent-primary)' }}>Step {sIdx + 1}: {step.step_type?.toUpperCase()}</span>
+                              <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{step.agent_id ? `@${step.agent_id}` : ''}</span>
+                            </div>
+                            <pre className="inspector-code-box" style={{ margin: 0, maxHeight: '140px' }}>
+                              <code>{JSON.stringify(step, null, 2)}</code>
+                            </pre>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

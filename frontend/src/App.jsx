@@ -3,9 +3,11 @@ import { Routes, Route } from 'react-router-dom';
 import LeftSidebar from './components/LeftSidebar/LeftSidebar';
 import RightPanel from './components/RightPanel/RightPanel';
 import Gateway from './pages/Gateway/Gateway';
+import Settings from './pages/Settings/Settings';
 import { ChatProvider, useChat } from './context/ChatContext';
 import { HealthProvider } from './context/HealthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { AgentProvider } from './context/AgentContext';
 import ChatDock from './components/ChatDock/ChatDock';
 import './App.css';
 
@@ -73,6 +75,7 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<ChatDock />} />
             <Route path="/gateway" element={<Gateway />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </div>
@@ -92,9 +95,11 @@ export function App() {
   return (
     <ThemeProvider>
       <HealthProvider>
-        <ChatProvider>
-          <AppLayout />
-        </ChatProvider>
+        <AgentProvider>
+          <ChatProvider>
+            <AppLayout />
+          </ChatProvider>
+        </AgentProvider>
       </HealthProvider>
     </ThemeProvider>
   );

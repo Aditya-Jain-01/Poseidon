@@ -11,6 +11,8 @@ export default defineConfig({
       '/health': 'http://localhost:8000',
       '/memory': 'http://localhost:8000',
       '/runs': 'http://localhost:8000',
+      '/agents': 'http://localhost:8000',
+      '/settings': 'http://localhost:8000',
       '/ws': {
         target: 'ws://localhost:8000',
         ws: true,

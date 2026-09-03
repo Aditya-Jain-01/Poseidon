@@ -22,7 +22,10 @@ except ImportError:
     sqlite_vec = None
     HAS_SQLITE_VEC = False
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 from app.config import settings
 from app.memory.embeddings import embedding_service
@@ -285,27 +288,49 @@ class EpisodicStore:
                     if not all_rows:
                         return []
                     
-                    q_arr = np.array(query_vector, dtype=float)
-                    q_norm = np.linalg.norm(q_arr)
-                    if q_norm == 0:
-                        return []
+                    if np is not None:
+                        q_arr = np.array(query_vector, dtype=float)
+                        q_norm = np.linalg.norm(q_arr)
+                        if q_norm == 0:
+                            return []
 
-                    scored = []
-                    for r in all_rows:
-                        r_dict = dict(r)
-                        emb_raw = r_dict.pop("embedding", None)
-                        if emb_raw:
-                            try:
-                                emb_list = json.loads(emb_raw) if isinstance(emb_raw, str) else emb_raw
-                                v_arr = np.array(emb_list, dtype=float)
-                                v_norm = np.linalg.norm(v_arr)
-                                if v_norm > 0:
-                                    sim = np.dot(q_arr, v_arr) / (q_norm * v_norm)
-                                    dist = 1.0 - float(sim)
-                                    r_dict["_vec_distance"] = dist
-                                    scored.append((dist, r_dict))
-                            except Exception:
-                                pass
+                        scored = []
+                        for r in all_rows:
+                            r_dict = dict(r)
+                            emb_raw = r_dict.pop("embedding", None)
+                            if emb_raw:
+                                try:
+                                    emb_list = json.loads(emb_raw) if isinstance(emb_raw, str) else emb_raw
+                                    v_arr = np.array(emb_list, dtype=float)
+                                    v_norm = np.linalg.norm(v_arr)
+                                    if v_norm > 0:
+                                        sim = np.dot(q_arr, v_arr) / (q_norm * v_norm)
+                                        dist = 1.0 - float(sim)
+                                        r_dict["_vec_distance"] = dist
+                                        scored.append((dist, r_dict))
+                                except Exception:
+                                    pass
+                    else:
+                        q_norm = sum(x * x for x in query_vector) ** 0.5
+                        if q_norm == 0:
+                            return []
+
+                        scored = []
+                        for r in all_rows:
+                            r_dict = dict(r)
+                            emb_raw = r_dict.pop("embedding", None)
+                            if emb_raw:
+                                try:
+                                    emb_list = json.loads(emb_raw) if isinstance(emb_raw, str) else emb_raw
+                                    v_norm = sum(x * x for x in emb_list) ** 0.5
+                                    if v_norm > 0:
+                                        dot = sum(a * b for a, b in zip(query_vector, emb_list))
+                                        sim = dot / (q_norm * v_norm)
+                                        dist = 1.0 - float(sim)
+                                        r_dict["_vec_distance"] = dist
+                                        scored.append((dist, r_dict))
+                                except Exception:
+                                    pass
 
                     scored.sort(key=lambda x: x[0])
                     return [item[1] for item in scored[:limit]]

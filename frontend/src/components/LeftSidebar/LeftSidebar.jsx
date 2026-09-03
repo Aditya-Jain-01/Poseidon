@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   Globe,
+  Settings as SettingsIcon,
   Sun,
   Moon
 } from 'lucide-react';
@@ -290,11 +291,16 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse }) {
         </div>
       )}
 
-      {/* Footer Theme Toggle & Gateway API Link */}
+      {/* Footer Theme Toggle & Gateway / Settings Links */}
       <div className="sidebar-footer">
         <NavLink to="/gateway" className={({ isActive }) => `sidebar-gateway-pill ${isActive ? 'active' : ''}`} title="Gateway &amp; API Ledger">
           <Globe size={13} />
-          {!isCollapsed && <span>Gateway &amp; API Ledger</span>}
+          {!isCollapsed && <span>Gateway &amp; API</span>}
+        </NavLink>
+
+        <NavLink to="/settings" className={({ isActive }) => `sidebar-gateway-pill ${isActive ? 'active' : ''}`} title="Developer Cockpit &amp; Agent Settings">
+          <SettingsIcon size={13} />
+          {!isCollapsed && <span>Agent Cockpit</span>}
         </NavLink>
 
         <button 

@@ -7,12 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.gateway.web_adapter import router as web_router
 from app.gateway.memory_adapter import router as memory_router
+from app.gateway.agents_adapter import router as agents_router
+from app.gateway.trajectory_adapter import router as trajectory_router
 
 
 app = FastAPI(
     title="Poseidon Agent",
     description="Persistent-memory personal agent",
-    version="0.2.0",
+    version="0.4.0",
 )
 
 app.add_middleware(
@@ -28,6 +30,8 @@ from fastapi.staticfiles import StaticFiles
 
 app.include_router(web_router)
 app.include_router(memory_router)
+app.include_router(agents_router)
+app.include_router(trajectory_router)
 
 
 @app.get("/health")

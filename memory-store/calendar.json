@@ -1,0 +1,39 @@
+{
+  "events": [
+    {
+      "id": "cal-1",
+      "title": "Poseidon Sprint 4 Retro & Demo",
+      "starts_at": "2026-09-04T15:00:00Z",
+      "ends_at": "2026-09-04T16:00:00Z",
+      "description": "Demonstration of party of agents, drop-in souls, dynamic tool loop, and developer cockpit settings UI."
+    },
+    {
+      "id": "cal-2",
+      "title": "Deep-dive: Multi-Provider LLM Fallbacks",
+      "starts_at": "2026-09-05T11:00:00Z",
+      "ends_at": "2026-09-05T12:00:00Z",
+      "description": "Technical discussion on Ollama local inference versus OpenRouter cloud free tier latency and token budget."
+    },
+    {
+      "id": "cal-3",
+      "title": "Security Architecture Sync: Taint Tracking",
+      "starts_at": "2026-09-06T14:00:00Z",
+      "ends_at": "2026-09-06T14:45:00Z",
+      "description": "Sync with Marcus Vance on untrusted web input taint tags and parameter diff authorization."
+    },
+    {
+      "id": "cal-4",
+      "title": "Kraken Code-Gen Benchmark Review",
+      "starts_at": "2026-09-07T09:30:00Z",
+      "ends_at": "2026-09-07T10:15:00Z",
+      "description": "Evaluate Kraken agent performance in shipping autonomous prototypes and unit test scaffolds."
+    },
+    {
+      "id": "cal-5",
+      "title": "Master Orchestrator Interface Planning",
+      "starts_at": "2026-09-08T16:00:00Z",
+      "ends_at": "2026-09-08T17:00:00Z",
+      "description": "Designing the Sprint 5 Poseidon Master Orchestrator atop the pluggable router seam."
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import { useHealth } from '../../context/HealthContext';
+import { useAgents } from '../../context/AgentContext';
 import './MessageBubble.css';
 
 /**
@@ -19,6 +20,7 @@ import './MessageBubble.css';
 export function MessageBubble({ message }) {
   const { openOverview } = useChat();
   const { modelName, isConnected } = useHealth();
+  const { agents } = useAgents();
   const [copied, setCopied] = useState(false);
 
   const isUser = message.role === 'user';
@@ -61,11 +63,40 @@ export function MessageBubble({ message }) {
     );
   }
 
+  const agentId = (message.activeAgent || 'octavious').toLowerCase();
+  const agentInfo = agents?.find((a) => a.id === agentId) || {
+    id: agentId,
+    display_name: agentId === 'octavious' ? 'Octavious' : agentId === 'nereus' ? 'Nereus' : agentId === 'kraken' ? 'Kraken' : (agentId.charAt(0).toUpperCase() + agentId.slice(1)),
+    avatar: agentId === 'octavious' ? 'O' : agentId === 'nereus' ? 'N' : agentId === 'kraken' ? 'K' : (agentId[0]?.toUpperCase() || 'A'),
+    color: agentId === 'octavious' ? '#39ff14' : agentId === 'nereus' ? '#00bfff' : agentId === 'kraken' ? '#ff4500' : '#a855f7',
+  };
+
   return (
     <div className={`agent-message-row animate-fade-in ${isError ? 'is-error' : ''}`}>
       <div className="agent-message-container">
         {/* Model & Meta Tag Row */}
         <div className="agent-model-meta-row">
+          {/* Agent Identity Badge */}
+          <div 
+            className="agent-identity-badge-pill"
+            style={{
+              borderColor: `${agentInfo.color}55`,
+              backgroundColor: `${agentInfo.color}18`,
+              boxShadow: `0 0 12px ${agentInfo.color}22`
+            }}
+            title={`Handled by Agent: ${agentInfo.display_name}`}
+          >
+            <span 
+              className="agent-badge-avatar"
+              style={{ backgroundColor: agentInfo.color }}
+            >
+              {agentInfo.avatar || agentInfo.display_name?.[0] || 'A'}
+            </span>
+            <span className="agent-badge-name" style={{ color: agentInfo.color }}>
+              {agentInfo.display_name}
+            </span>
+          </div>
+
           <div className="gemini-model-badge" title={`Active Model: ${dynamicModel}`}>
             <Sparkles size={12} className="sparkle-icon" />
             <span className="gemini-model-name">{dynamicModel}</span>
