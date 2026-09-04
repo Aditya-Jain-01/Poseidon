@@ -16,6 +16,7 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 memory-store/*.db
+.pytest_cache/
 
 # IDEs and Editors
 .idea/
@@ -28,3 +29,10 @@ node_modules/
 venv/
 .venv/
 __pycache__/
+
+.agents
+AGENTS.md
+CONTEXT.md
+pytest.ini
+skills-lock.json
+docs/
