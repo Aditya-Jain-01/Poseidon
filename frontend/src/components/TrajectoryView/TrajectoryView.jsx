@@ -19,6 +19,77 @@ import { fetchTrajectory } from '../../api/agents';
 import './TrajectoryView.css';
 
 /**
+ * Strip raw markdown syntax from preview snippets
+ */
+export function stripMarkdown(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/#+\s+/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+}
+
+const TOTAL_METER_BLOCKS = 32;
+
+/**
+ * Discrete Segmented Mechanical Execution Meter Row (Nothing OS Analog Hardware Meters)
+ */
+function SegmentedExecutionRow({ label, events, category, onSelectEvent }) {
+  const matchingEvents = events.filter((e) => {
+    if (category === 'USER') return e.type === 'USER';
+    if (category === 'ASSISTANT') return e.type === 'ASSISTANT';
+    if (category === 'TOOLS') return e.type === 'TOOL' || e.type === 'SECURITY';
+    return false;
+  });
+
+  return (
+    <div className="gantt-row">
+      <span className="gantt-row-label">{label}</span>
+      <div className="segmented-meter-track" role="meter" aria-label={`${label} execution meter`}>
+        {Array.from({ length: TOTAL_METER_BLOCKS }).map((_, idx) => {
+          let matched = null;
+          matchingEvents.forEach((evt, eIdx) => {
+            let start = 0;
+            let span = 0;
+            if (category === 'USER') {
+              start = Math.floor((eIdx * 0.3) * TOTAL_METER_BLOCKS);
+              span = Math.max(2, Math.floor(0.24 * TOTAL_METER_BLOCKS));
+            } else if (category === 'ASSISTANT') {
+              start = Math.floor((0.20 + eIdx * 0.3) * TOTAL_METER_BLOCKS);
+              span = Math.max(3, Math.floor(0.35 * TOTAL_METER_BLOCKS));
+            } else if (category === 'TOOLS') {
+              start = Math.floor((0.28 + eIdx * 0.15) * TOTAL_METER_BLOCKS);
+              span = Math.max(2, Math.floor(0.18 * TOTAL_METER_BLOCKS));
+            }
+            if (idx >= start && idx < Math.min(TOTAL_METER_BLOCKS, start + span)) {
+              matched = evt;
+            }
+          });
+
+          const isLit = Boolean(matched);
+          const colorType = category === 'USER' ? 'input-seg' : category === 'ASSISTANT' ? 'model-seg' : 'tool-seg';
+
+          return (
+            <div
+              key={idx}
+              className={`segmented-meter-block ${colorType} ${isLit ? 'is-lit' : ''}`}
+              title={matched ? `${label} (Turn ${matched.turn}): ${matched.title}` : undefined}
+              onClick={() => {
+                if (matched) onSelectEvent(matched.id);
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
  * High-Fidelity Poseidon Trajectory View
  * Dynamic Execution Waterfall Timeline, Event Ledger, and Multi-tab Inspector.
  */
@@ -64,13 +135,14 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
       const fullIsoStr = dateObj.toISOString().replace('T', ' ').slice(0, 23);
 
       if (msg.role === 'user') {
+        const cleanContent = stripMarkdown(msg.content);
         list.push({
           id: `user-${msg.id || idx}`,
           turn: currentTurn,
           step: stepCount++,
           type: 'USER',
           typeColor: 'user',
-          label: msg.content,
+          label: cleanContent,
           title: 'User Prompt & Input Event',
           summary: `Inbound user query triggering turn ${currentTurn}.`,
           payload: msg.content,
@@ -139,6 +211,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
 
         // 3. Agent response step
         if (msg.content) {
+          const cleanContent = stripMarkdown(msg.content);
           list.push({
             id: `assistant-${msg.id || idx}`,
             turn: currentTurn,
@@ -146,7 +219,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
             type: 'ASSISTANT',
             typeColor: 'assistant',
             hasDot: true,
-            label: msg.content.slice(0, 120) + (msg.content.length > 120 ? '...' : ''),
+            label: cleanContent.slice(0, 120) + (cleanContent.length > 120 ? '...' : ''),
             title: 'Agent Synthesized Response',
             summary: `Agent synthesized reasoning and generated response for turn ${currentTurn}.`,
             payload: `Prompt context and tool outputs assembled for model synthesis.`,
@@ -253,64 +326,39 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
         </div>
       </div>
 
-      {/* ── Waterfall Timeline Gantt Chart ── */}
+      {/* ── Segmented Analog Execution Meters (Nothing OS Hardware Blocks) ── */}
       <div className="waterfall-gantt-card">
-        <div className="gantt-row">
-          <span className="gantt-row-label">Input</span>
-          <div className="gantt-track">
-            {events.filter(e => e.type === 'USER').map((evt, i) => (
-              <div 
-                key={evt.id}
-                className="gantt-bar input-bar" 
-                style={{ left: `${Math.min(i * 30, 80)}%`, width: '18%' }} 
-                title={`Turn ${evt.turn}: User Input`}
-                onClick={() => { setSelectedEventId(evt.id); setIsInspectorOpen(true); }}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="gantt-row">
-          <span className="gantt-row-label">Model</span>
-          <div className="gantt-track">
-            {events.filter(e => e.type === 'ASSISTANT').map((evt, i) => (
-              <div 
-                key={evt.id}
-                className="gantt-bar model-bar" 
-                style={{ left: `${Math.min(15 + i * 30, 82)}%`, width: '16%' }} 
-                title={`Turn ${evt.turn}: Assistant Synthesis`}
-                onClick={() => { setSelectedEventId(evt.id); setIsInspectorOpen(true); }}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="gantt-row">
-          <span className="gantt-row-label">Tools</span>
-          <div className="gantt-track">
-            {events.filter(e => e.type === 'TOOL' || e.type === 'SECURITY').map((evt, i) => (
-              <div 
-                key={evt.id}
-                className={`gantt-bar ${evt.type === 'SECURITY' ? 'security-bar' : 'tool-bar'}`} 
-                style={{ left: `${Math.min(25 + i * 15, 88)}%`, width: '12%' }} 
-                title={`${evt.type}: ${evt.toolName || evt.title}`}
-                onClick={() => { setSelectedEventId(evt.id); setIsInspectorOpen(true); }}
-              />
-            ))}
-          </div>
-        </div>
+        <SegmentedExecutionRow 
+          label="Input" 
+          events={events} 
+          category="USER" 
+          onSelectEvent={(id) => { setSelectedEventId(id); setIsInspectorOpen(true); }} 
+        />
+        <SegmentedExecutionRow 
+          label="Model" 
+          events={events} 
+          category="ASSISTANT" 
+          onSelectEvent={(id) => { setSelectedEventId(id); setIsInspectorOpen(true); }} 
+        />
+        <SegmentedExecutionRow 
+          label="Tools" 
+          events={events} 
+          category="TOOLS" 
+          onSelectEvent={(id) => { setSelectedEventId(id); setIsInspectorOpen(true); }} 
+        />
       </div>
 
-      {/* ── Two-Column Trajectory Split View ── */}
+      {/* ── Two-Column Trajectory Split View (IDE Timeline) ── */}
       <div className={`trajectory-split-content ${!isInspectorOpen ? 'inspector-closed' : ''}`}>
         {/* Left Column: Event Ledger */}
         <div className="trajectory-ledger-column">
-          <div className="turn-indicator-badge">
-            <span>Turn {userTurnsCount || 1}</span>
+          <div className="ledger-timeline-header">
+            <span className="ledger-header-title">EXECUTION TIMELINE</span>
+            <span className="ledger-header-count">[ TURN {userTurnsCount || 1} · {filteredEvents.length} STEPS ]</span>
           </div>
 
           <div className="trajectory-events-list">
-            {filteredEvents.map((evt) => {
+            {filteredEvents.map((evt, idx) => {
               const isSelected = evt.id === activeEventId;
 
               return (
@@ -322,8 +370,12 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
                     setIsInspectorOpen(true);
                   }}
                 >
+                  <div className="timeline-node-connector">
+                    <span className={`event-status-dot dot-${evt.typeColor}`} />
+                    {idx < filteredEvents.length - 1 && <span className="timeline-stem-line" />}
+                  </div>
+
                   <div className="event-badge-wrapper">
-                    {evt.hasDot && <span className={`event-status-dot dot-${evt.typeColor}`} />}
                     <span className={`event-type-pill pill-${evt.typeColor}`}>
                       {evt.type}
                     </span>
