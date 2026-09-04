@@ -52,9 +52,27 @@
 }
 
 .animate-slide-in-right {
-  animation: slideInRight 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slideInRight 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-slide-in-up {
-  animation: slideInUp 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slideInUp 140ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Nothing OS Mechanical Red LED Pulse */
+@keyframes redLedPulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 rgba(215, 25, 33, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow: 0 0 8px rgba(215, 25, 33, 0.6);
+  }
+}
+
+.animate-red-led {
+  animation: redLedPulse 1.4s ease-in-out infinite;
 }

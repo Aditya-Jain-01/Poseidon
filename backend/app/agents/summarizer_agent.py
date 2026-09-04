@@ -51,6 +51,20 @@ You MUST reply ONLY with a valid JSON object matching this schema:
 """
 
 
+<<<<<<< Updated upstream
+=======
+from app.llm_providers import llm_provider
+
+
+def _get_client() -> AsyncOpenAI:
+    return llm_provider.get_client("summarizer")
+
+
+def _get_model() -> str:
+    return llm_provider.get_model("summarizer")
+
+
+>>>>>>> Stashed changes
 def _format_conversation(events: list[dict[str, Any]]) -> str:
     """Format raw episodic events into a chronological conversation transcript."""
     lines = []
@@ -112,8 +126,13 @@ async def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         f"Output your JSON response below:"
     )
 
+<<<<<<< Updated upstream
     client = llm_provider.get_client("octavious")
     model = llm_provider.get_model("octavious")
+=======
+    client = _get_client()
+    model = _get_model()
+>>>>>>> Stashed changes
 
     try:
         response = await client.chat.completions.create(
@@ -122,7 +141,11 @@ async def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
                 {"role": "system", "content": SUMMARIZER_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
+<<<<<<< Updated upstream
             response_format={"type": "json_object"},
+=======
+            response_format={"type": "json_object"} if "openai" in str(client.base_url).lower() else None,
+>>>>>>> Stashed changes
         )
         content = response.choices[0].message.content or ""
         return _extract_json(content)

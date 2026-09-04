@@ -15,7 +15,7 @@ from typing import Any
 
 from app.config import settings
 
-PREBUILT_IDS = {"octavious", "nereus", "kraken"}
+PREBUILT_IDS = {"poseidon", "nereus", "kraken"}
 MAX_CUSTOM_AGENTS = 2
 
 
@@ -153,7 +153,7 @@ class SoulStore:
                     "id": agent_id,
                     "display_name": fm.get("display_name", agent_id.capitalize()),
                     "avatar": str(fm.get("avatar", agent_id[0].upper())),
-                    "color": fm.get("color", "#39ff14" if agent_id == "octavious" else ("#00bfff" if agent_id == "nereus" else "#ff4500")),
+                    "color": fm.get("color", "#39ff14" if agent_id == "poseidon" else ("#00bfff" if agent_id == "nereus" else "#ff4500")),
                     "role": fm.get("role", "Specialized Agent"),
                     "description": fm.get("description", ""),
                     "personality": body,
@@ -168,7 +168,7 @@ class SoulStore:
 
         # Order: prebuilt agents first in standard order, then custom agents alphabetically
         ordered: dict[str, dict[str, Any]] = {}
-        for pid in ["octavious", "nereus", "kraken"]:
+        for pid in ["poseidon", "nereus", "kraken"]:
             if pid in discovered:
                 ordered[pid] = discovered.pop(pid)
         for cid, data in sorted(discovered.items()):
@@ -285,7 +285,7 @@ class SoulStore:
         """
         agent = self.get_agent(agent_id)
         if not agent:
-            agent = self.get_agent("octavious")
+            agent = self.get_agent("poseidon")
 
         if not agent:
             return "You are Poseidon, a personal AI assistant. Be concise and direct."

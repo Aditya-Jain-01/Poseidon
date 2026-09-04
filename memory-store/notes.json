@@ -15,6 +15,14 @@
     {
       "id": "note-4",
       "text": "Kraken POC Guidelines: Prefer pragmatic and runnable code over perfection. Lead with code blocks, follow with execution rationale."
+    },
+    {
+      "id": "3a74cb9a-3561-49f2-8937-4667002f2fdb",
+      "text": "2 oranges\n3 bananas\n4 apples"
+    },
+    {
+      "id": "ce411340-90f2-4600-859c-080c6acd786b",
+      "text": "2 oranges\n3 bananas\n4 apples"
     }
   ],
   "reminders": [
@@ -25,7 +33,7 @@
     },
     {
       "id": "rem-2",
-      "text": "Verify local Ollama service connectivity for Octavious agent runner",
+      "text": "Verify local Ollama service connectivity for Poseidon agent runner",
       "due_at": "2026-09-04T14:30:00Z"
     },
     {

@@ -21,7 +21,7 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self.agents_dir.mkdir(parents=True, exist_ok=True)
 
         # Seed prebuilt souls
-        for pid, name in [("octavious", "Octavious"), ("nereus", "Nereus"), ("kraken", "Kraken")]:
+        for pid, name in [("poseidon", "Poseidon"), ("nereus", "Nereus"), ("kraken", "Kraken")]:
             soul_file = self.agents_dir / f"{pid}.soul.md"
             soul_file.write_text(
                 f"---\ndisplay_name: {name}\navatar: {name[0]}\nrole: Test Role\nis_prebuilt: true\n---\n# {name}\n\nPersona",
@@ -49,14 +49,14 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         data = res.json()
         self.assertGreaterEqual(len(data), 3)
         ids = [a["id"] for a in data]
-        self.assertIn("octavious", ids)
+        self.assertIn("poseidon", ids)
         self.assertIn("nereus", ids)
         self.assertIn("kraken", ids)
 
     def test_get_agent_success_and_404(self):
-        res = self.client.get("/agents/octavious")
+        res = self.client.get("/agents/poseidon")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["display_name"], "Octavious")
+        self.assertEqual(res.json()["display_name"], "Poseidon")
 
         res404 = self.client.get("/agents/nonexistent_agent")
         self.assertEqual(res404.status_code, 404)
@@ -85,7 +85,7 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self.assertEqual(update_res.json()["role"], "Senior Shape Shifter")
 
         # Deleting prebuilt should fail with 400
-        del_prebuilt = self.client.delete("/agents/octavious")
+        del_prebuilt = self.client.delete("/agents/poseidon")
         self.assertEqual(del_prebuilt.status_code, 400)
 
         # Deleting custom should succeed
@@ -101,14 +101,14 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self.assertIn("agents", data)
 
         # Update an agent's provider
-        put_res = self.client.put("/settings/llm/octavious", json={"preset": "local"})
+        put_res = self.client.put("/settings/llm/poseidon", json={"preset": "local"})
         self.assertEqual(put_res.status_code, 200)
         self.assertEqual(put_res.json()["preset"], "local")
 
     def test_trajectory_endpoint(self):
         run_id = "test-run-123"
-        trajectory_store.record(run_id, "route", agent_id="octavious")
-        trajectory_store.record(run_id, "agent", agent_id="octavious", tool_calls=0)
+        trajectory_store.record(run_id, "route", agent_id="poseidon")
+        trajectory_store.record(run_id, "agent", agent_id="poseidon", tool_calls=0)
 
         res = self.client.get(f"/runs/{run_id}/trajectory")
         self.assertEqual(res.status_code, 200)

@@ -344,30 +344,24 @@ class EpisodicStore:
         recency_limit: int = 5,
         relevance_limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Hybrid retrieval combining Vector RAG relevance and SQL recency.
+        """Retrieve episodic events semantically relevant to the user query.
 
-        Deduplicates records and returns them in chronological order.
+        If a query is provided, performs vector similarity search to avoid
+        polluting the context with unrelated prior session chat history.
         """
-        # 1. Fetch relevant records (Vector RAG)
-        relevant_events = self.search_relevant(user_id, query, limit=relevance_limit)
+        if not query or not query.strip():
+            # If no query provided, return recent events as fallback
+            return self.get_recent(user_id, limit=recency_limit)
 
-        # 2. Fetch recent records (SQL)
-        recent_events = self.get_recent(user_id, limit=recency_limit)
-
-        # 3. Merge and deduplicate by ID
+        # Vector RAG search for semantically relevant episodic events
+        relevant_events = self.search_relevant(user_id, query.strip(), limit=relevance_limit)
         seen_ids = set()
         combined: list[dict[str, Any]] = []
 
         for ev in relevant_events:
             if ev["id"] not in seen_ids:
                 seen_ids.add(ev["id"])
-                # Remove the internal distance field before returning
                 ev.pop("_vec_distance", None)
-                combined.append(ev)
-
-        for ev in recent_events:
-            if ev["id"] not in seen_ids:
-                seen_ids.add(ev["id"])
                 combined.append(ev)
 
         combined.sort(key=lambda x: (x["created_at"], x["id"]))

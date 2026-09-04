@@ -1,22 +1,18 @@
-"""LLM Provider Manager — Multi-provider client abstraction with per-agent assignment.
+"""LLM Provider Manager — Direct .env provider authority.
 
-Sprint 4 (Person A):
-- Supports Local (Ollama), Cloud Free (OpenRouter), Cloud Paid (OpenAI/Codex), and Custom endpoints.
-- Allows any agent to be assigned to any provider dynamically without hardcoded locks.
-- Persists user preferences to `memory-store/llm_config.json`.
-- Provides connection health verification.
+Resolves all LLM clients, base URLs, models, and API keys directly from
+Poseidon's environment configuration (.env). No hidden json file overrides.
 """
 
 from __future__ import annotations
 
-import json
 import os
-from pathlib import Path
 from typing import Any
 from openai import AsyncOpenAI
 
 from app.config import settings
 
+<<<<<<< Updated upstream
 DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
     "local": {
       "base_url": "http://localhost:11434/v1",
@@ -46,40 +42,41 @@ DEFAULT_AGENT_OVERRIDES: dict[str, dict[str, Any]] = {
     "kraken": {"preset": "cloud_free"},
 }
 
+=======
+>>>>>>> Stashed changes
 
 class LLMProvider:
-    """Manages multi-provider LLM clients and per-agent configuration."""
+    """Manages LLM clients configured directly from environment variables (.env)."""
 
     def __init__(self) -> None:
-        self._config_path: Path = Path(settings.llm_config_path)
         self._clients: dict[str, AsyncOpenAI] = {}
-        self._providers: dict[str, dict[str, Any]] = {}
-        self._agent_overrides: dict[str, dict[str, Any]] = {}
-        self.load_config()
 
-    def _get_env_key(self, env_var_name: str) -> str:
-        """Resolve an API key from settings or OS environment."""
-        if not env_var_name:
-            return ""
-        if env_var_name == "OPENROUTER_API_KEY" and settings.openrouter_api_key:
+    def _get_api_key(self) -> str:
+        """Resolve API key directly from settings (.env) or OS environment."""
+        if settings.openrouter_api_key:
             return settings.openrouter_api_key
+<<<<<<< Updated upstream
         if env_var_name == "NVIDIA_API_KEY" and settings.nvidia_api_key:
             return settings.nvidia_api_key
         if env_var_name == "KRAKEN_API_KEY" and settings.kraken_api_key:
             return settings.kraken_api_key
         return os.environ.get(env_var_name, "")
+=======
+        return (
+            os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("GROQ_API_KEY")
+            or os.environ.get("KRAKEN_API_KEY")
+            or ""
+        )
+>>>>>>> Stashed changes
 
-    def load_config(self) -> None:
-        """Load configuration from disk, creating default if absent."""
-        if self._config_path.exists():
-            try:
-                raw = json.loads(self._config_path.read_text(encoding="utf-8"))
-                self._providers = raw.get("providers", DEFAULT_PROVIDERS)
-                self._agent_overrides = raw.get("agent_overrides", DEFAULT_AGENT_OVERRIDES)
-                return
-            except Exception as e:
-                print(f"[LLMProvider] Error reading {self._config_path}: {e}. Falling back to defaults.")
+    def get_agent_resolved_config(self, agent_id: str = "poseidon") -> dict[str, Any]:
+        """Resolve connection parameters purely from .env."""
+        api_key = self._get_api_key()
+        base_url = settings.poseidon_base_url.rstrip("/")
+        model = settings.poseidon_model
 
+<<<<<<< Updated upstream
         self._providers = {k: dict(v) for k, v in DEFAULT_PROVIDERS.items()}
         self._agent_overrides = {k: dict(v) for k, v in DEFAULT_AGENT_OVERRIDES.items()}
         self.save_config()
@@ -124,18 +121,23 @@ class LLMProvider:
         # Fallback for local ollama
         if preset == "local" and not api_key:
             api_key = "ollama"
+=======
+        # Fallback for local ollama if key is not needed
+        if "localhost" in base_url or "11434" in base_url:
+            api_key = api_key or "ollama"
+>>>>>>> Stashed changes
 
         return {
             "agent_id": agent_id.lower(),
-            "preset": preset,
-            "base_url": base_url.rstrip("/"),
+            "preset": "env",
+            "base_url": base_url,
             "model": model,
             "api_key": api_key,
             "has_api_key": bool(api_key),
         }
 
-    def get_client(self, agent_id: str) -> AsyncOpenAI:
-        """Get or initialize an AsyncOpenAI client configured for the agent."""
+    def get_client(self, agent_id: str = "poseidon") -> AsyncOpenAI:
+        """Get or initialize an AsyncOpenAI client configured from .env."""
         conf = self.get_agent_resolved_config(agent_id)
         cache_key = f"{conf['base_url']}::{conf['api_key']}"
 
@@ -147,10 +149,9 @@ class LLMProvider:
 
         return self._clients[cache_key]
 
-    def get_model(self, agent_id: str) -> str:
-        """Get the configured LLM model string for an agent."""
-        conf = self.get_agent_resolved_config(agent_id)
-        return conf["model"]
+    def get_model(self, agent_id: str = "poseidon") -> str:
+        """Get the configured LLM model string from .env."""
+        return settings.poseidon_model
 
     def update_provider(
         self,
@@ -160,82 +161,74 @@ class LLMProvider:
         api_key: str | None = None,
         model: str | None = None,
     ) -> dict[str, Any]:
-        """Update provider assignment and overrides for an agent."""
-        aid = agent_id.lower()
-        if aid not in self._agent_overrides:
-            self._agent_overrides[aid] = {}
+        """Returns the active .env configuration (runtime overrides disabled)."""
+        return self.get_agent_resolved_config(agent_id)
 
-        if preset is not None:
-            self._agent_overrides[aid]["preset"] = preset
-        if base_url is not None:
-            self._agent_overrides[aid]["base_url"] = base_url.rstrip("/")
-        if api_key is not None:
-            self._agent_overrides[aid]["api_key"] = api_key
-        if model is not None:
-            self._agent_overrides[aid]["model"] = model
-
-        self.save_config()
-        return self.get_agent_resolved_config(aid)
-
-    async def check_availability(self, agent_id: str) -> dict[str, Any]:
-        """Check whether the agent's configured LLM provider endpoint is reachable."""
+    async def check_availability(self, agent_id: str = "poseidon") -> dict[str, Any]:
+        """Check whether the configured LLM endpoint from .env is reachable."""
         conf = self.get_agent_resolved_config(agent_id)
         client = self.get_client(agent_id)
 
         try:
-            # Quick timeout check using models.list
             import asyncio
-            await asyncio.wait_for(client.models.list(), timeout=4.0)
+            await asyncio.wait_for(client.models.list(), timeout=5.0)
             return {
                 "agent_id": agent_id,
                 "available": True,
                 "status": "online",
-                "preset": conf["preset"],
+                "preset": "env",
                 "model": conf["model"],
                 "base_url": conf["base_url"],
-                "message": f"Successfully connected to {conf['preset']} provider ({conf['model']})",
+                "message": f"Successfully connected to endpoint ({conf['model']})",
             }
         except Exception as e:
             err_msg = str(e)
             if "Connection refused" in err_msg or "Cannot connect" in err_msg or "All connection attempts failed" in err_msg:
-                detail = f"Cannot reach endpoint at {conf['base_url']}. If using Ollama, ensure it is running."
+                detail = f"Cannot reach endpoint at {conf['base_url']}. Verify network or local runner."
             elif "401" in err_msg or "Unauthorized" in err_msg or "Invalid API Key" in err_msg:
-                detail = "Authentication failed: missing or invalid API key."
+                detail = "Authentication failed: missing or invalid API key in .env."
+            elif "404" in err_msg or "model_not_found" in err_msg:
+                detail = f"Model '{conf['model']}' not found at {conf['base_url']}. Check model name in .env."
             else:
-                detail = f"Endpoint responded with error: {err_msg[:120]}"
+                detail = f"Endpoint error: {err_msg[:140]}"
 
             return {
                 "agent_id": agent_id,
                 "available": False,
                 "status": "offline",
-                "preset": conf["preset"],
+                "preset": "env",
                 "model": conf["model"],
                 "base_url": conf["base_url"],
                 "message": detail,
             }
 
     def get_all_configs(self) -> dict[str, Any]:
-        """Return safe view of all provider configs for UI display."""
+        """Return safe view of .env provider config for UI display."""
         from app.soul import soul_store
 
+        conf = self.get_agent_resolved_config("poseidon")
         agents_data: dict[str, Any] = {}
         for agent in soul_store.load_all_agents():
             aid = agent["id"]
-            conf = self.get_agent_resolved_config(aid)
             agents_data[aid] = {
                 "agent_id": aid,
                 "display_name": agent["display_name"],
                 "avatar": agent["avatar"],
                 "color": agent["color"],
-                "preset": conf["preset"],
+                "preset": "env",
                 "model": conf["model"],
                 "base_url": conf["base_url"],
                 "has_api_key": conf["has_api_key"],
             }
 
         return {
-            "providers": self._providers,
-            "agent_overrides": self._agent_overrides,
+            "providers": {
+                "env": {
+                    "base_url": conf["base_url"],
+                    "default_model": conf["model"],
+                }
+            },
+            "agent_overrides": {},
             "agents": agents_data,
         }
 

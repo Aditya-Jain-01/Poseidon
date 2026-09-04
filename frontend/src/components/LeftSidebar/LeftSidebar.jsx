@@ -196,7 +196,7 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse }) {
               onClick={() => setIsWorkspaceExpanded(!isWorkspaceExpanded)}
             >
               <Folder size={14} className="workspace-folder-icon" />
-              <span className="workspace-folder-name">PoseidonHarness</span>
+              <span className="workspace-folder-name">poseidon</span>
               <div className="folder-chevron">
                 {isWorkspaceExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </div>

@@ -34,6 +34,27 @@
       "starts_at": "2026-09-08T16:00:00Z",
       "ends_at": "2026-09-08T17:00:00Z",
       "description": "Designing the Sprint 5 Poseidon Master Orchestrator atop the pluggable router seam."
+    },
+    {
+      "id": "21b0c276-058d-4a1e-846f-4ba00d93b950",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
+    },
+    {
+      "id": "cc4b2eba-f09a-4f85-9ee5-06cf3066140e",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
+    },
+    {
+      "id": "903b948e-169e-4012-9017-c196a16b2a38",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
     }
   ]
 }

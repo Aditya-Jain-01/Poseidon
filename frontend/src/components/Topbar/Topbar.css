@@ -1,9 +1,7 @@
 .topbar {
   height: var(--topbar-height);
-  background: var(--bg-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-default);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -25,28 +23,27 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-tertiary);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-visible);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--ease-fast);
 }
 
 .topbar-icon-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--border-default);
+  color: var(--text-display);
+  border-color: var(--text-display);
 }
 
 .topbar-icon-btn.active {
-  color: var(--accent-primary);
-  background: var(--accent-subtle);
-  border-color: var(--accent-border);
+  color: var(--text-display);
+  background: var(--surface-raised);
+  border-color: var(--text-display);
 }
 
 .theme-toggle-btn:hover {
-  color: var(--warning);
+  color: var(--text-display);
 }

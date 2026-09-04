@@ -16,3 +16,17 @@ export async function sendChatMessage(text, userId = 'local_user') {
     body: { text, user_id: userId },
   });
 }
+
+/**
+ * Submit human-in-the-loop approval decision.
+ * @param {string} approvalId - The pending approval ID
+ * @param {'approved' | 'denied'} decision - The resolution decision
+ * @returns {Promise<{ reply: string, run_id: string }>}
+ */
+export async function sendApprovalDecision(approvalId, decision) {
+  return api('/chat/approve', {
+    method: 'POST',
+    body: { approval_id: approvalId, decision },
+  });
+}
+

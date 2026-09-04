@@ -1,4 +1,4 @@
-/* CSS Reset & Global Base Styles */
+/* CSS Reset & Global Base Styles (Nothing OS System) */
 *,
 *::before,
 *::after {
@@ -15,27 +15,34 @@ body {
 
 body {
   background-color: var(--bg-canvas);
+  background-image: radial-gradient(circle, var(--border-visible) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   transition: background-color var(--ease-standard), color var(--ease-standard);
 }
 
-/* Custom Selection */
-::selection {
-  background-color: var(--accent-subtle);
-  color: var(--accent-primary);
+[data-theme="light"] body {
+  background-image: radial-gradient(circle, var(--border-visible) 1px, transparent 1px);
 }
 
-/* Custom Scrollbars */
+/* Nothing OS Custom Selection (Accent Red) */
+::selection {
+  background-color: var(--accent);
+  color: #FFFFFF;
+}
+
+/* Minimal 3px Hardware Scrollbars */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 ::-webkit-scrollbar-track {
@@ -43,66 +50,67 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-default);
-  border-radius: var(--radius-xs);
+  background: var(--border-visible);
+  border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
+  background: var(--text-secondary);
 }
 
-/* Base Typography Hierarchy (Inter) */
+/* Primary UI Typography Hierarchy (Inter) */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
   color: var(--text-primary);
   font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
-h1 { font-size: 1.75rem; } /* 28px */
-h2 { font-size: 1.25rem; } /* 20px */
-h3 { font-size: 1.05rem; } /* ~17px */
-h4 { font-size: 0.88rem; } /* 14px */
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1.05rem; }
+h4 { font-size: 0.88rem; }
 
 p {
   color: var(--text-secondary);
-  line-height: 1.45;
+  line-height: 1.5;
   font-weight: 400;
 }
 
 a {
-  color: var(--accent-primary);
-  text-decoration: none;
-  transition: color var(--ease-fast);
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: opacity var(--ease-fast);
 }
 
 a:hover {
-  color: var(--accent-hover);
+  opacity: 0.8;
 }
 
 /* Technical Telemetry & Code (IBM Plex Mono) */
 code, pre {
   font-family: var(--font-mono);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 code {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  padding: 0.15em 0.4em;
+  background: #1C1C1E;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.15em 0.45em;
   border-radius: var(--radius-xs);
-  color: var(--mono-accent);
+  color: var(--text-primary);
 }
 
 pre {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  padding: 10px 12px;
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 14px;
   border-radius: var(--radius-sm);
   overflow-x: auto;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 pre code {
@@ -118,13 +126,24 @@ button {
   border: none;
   outline: none;
   background: transparent;
+  transition: all var(--ease-fast);
+}
+
+button:active {
+  transform: scale(0.97);
 }
 
 input, textarea {
   font-family: var(--font-sans);
 }
 
-/* Utility Classes */
+/* Nothing OS Dot-Matrix Typography Utility (Accent Only) */
+.font-dot {
+  font-family: var(--font-dot);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .mono {
   font-family: var(--font-mono);
 }
@@ -141,6 +160,43 @@ input, textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── Nothing Design System Mechanical Utilities ── */
+.nothing-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.segmented-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.segmented-block {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 0;
+  transition: background-color var(--ease-fast);
+}
+
+.segmented-block.filled {
+  background: var(--text-display);
+}
+
+.segmented-block.accent {
+  background: var(--accent);
+}
+
+.segmented-block.success {
+  background: var(--success);
 }
 
 @media (prefers-reduced-motion: reduce) {

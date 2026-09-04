@@ -14,7 +14,7 @@ export const AgentContext = createContext(null);
 
 export function AgentProvider({ children }) {
   const [agents, setAgents] = useState([]);
-  const [activeAgentId, setActiveAgentId] = useState('octavious');
+  const [activeAgentId, setActiveAgentId] = useState('poseidon');
   const [llmSettings, setLlmSettings] = useState({ providers: {}, agent_overrides: {}, agents: {} });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);

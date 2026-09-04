@@ -31,7 +31,9 @@ class ChatResponse(BaseModel):
     reply: str
     run_id: str
     approval_request: dict[str, Any] | None = None
-    active_agent: str = "octavious"
+    active_agent: str = "poseidon"
+    memory_context: dict[str, Any] | None = None
+    trajectory: list[dict[str, Any]] | None = None
 
 
 class ApprovalDecisionRequest(BaseModel):

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useRef, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { sendChatMessage } from '../api/chat';
+import { sendChatMessage, sendApprovalDecision } from '../api/chat';
 
 export const ChatContext = createContext(null);
 
@@ -28,6 +28,7 @@ export function ChatProvider({ children }) {
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedTurn, setSelectedTurn] = useState(null);
   
   // Overview Drawer State (Right)
   const [isOverviewOpen, setIsOverviewOpen] = useLocalStorage('poseidon-overview-open', false);
@@ -173,9 +174,13 @@ export function ChatProvider({ children }) {
         content: data.reply,
         runId: data.run_id,
         approvalRequest: data.approval_request || null,
-        activeAgent: data.active_agent || 'octavious',
+        activeAgent: data.active_agent || 'poseidon',
+        memoryContext: data.memory_context || null,
+        trajectory: data.trajectory || [],
         timestamp: new Date().toISOString(),
       };
+
+      setSelectedTurn(agentMessage);
 
       setSessions((prev) =>
         prev.map((s) => {
@@ -212,6 +217,48 @@ export function ChatProvider({ children }) {
       setIsLoading(false);
     }
   }, [isLoading, activeSessionId, sessions, createNewSession, setSessions]);
+
+  const handleApprovalDecision = useCallback(
+    async (approvalId, decision) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await sendApprovalDecision(approvalId, decision);
+        const agentMessage = {
+          id: nextId(),
+          role: 'agent',
+          content: data.reply,
+          runId: data.run_id,
+          approvalRequest: data.approval_request || null,
+          activeAgent: data.active_agent || 'poseidon',
+          memoryContext: data.memory_context || null,
+          trajectory: data.trajectory || [],
+          timestamp: new Date().toISOString(),
+        };
+        setSelectedTurn(agentMessage);
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== activeSessionId) return s;
+            return {
+              ...s,
+              updatedAt: new Date().toISOString(),
+              messages: [...s.messages, agentMessage],
+            };
+          })
+        );
+      } catch (err) {
+        setError(err.message || 'Failed to submit approval decision');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [activeSessionId, setSessions]
+  );
+
+  const inspectTurn = useCallback((msg) => {
+    setSelectedTurn(msg);
+    setIsOverviewOpen(true);
+  }, [setIsOverviewOpen]);
 
   const clearChat = useCallback(() => {
     createNewSession();
@@ -260,6 +307,9 @@ export function ChatProvider({ children }) {
     clearAllHistory,
     sendMessage,
     clearChat,
+    handleApprovalDecision,
+    selectedTurn,
+    inspectTurn,
 
     // Overview Drawer
     isOverviewOpen,

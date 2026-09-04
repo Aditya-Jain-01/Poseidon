@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.llm_providers import LLMProvider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
+from app.llm_providers import LLMProvider
 from app.agents.qa_agent import call, AgentResult, _to_openai_messages
 
 
@@ -16,30 +16,10 @@ class TestLLMProviders(unittest.TestCase):
     """Test suite for per-agent LLM providers and the generic agent runner."""
 
     def setUp(self):
-        self.tmpdir = tempfile.TemporaryDirectory()
-        self.test_cfg_path = Path(self.tmpdir.name) / "llm_config.json"
-
-        # Write test config
-        test_payload = {
-            "providers": DEFAULT_PROVIDERS,
-            "agent_overrides": {
-                "octavious": {"preset": "local"},
-                "nereus": {"preset": "cloud_free"},
-                "kraken": {"preset": "cloud_free"},
-            }
-        }
-        self.test_cfg_path.write_text(json.dumps(test_payload), encoding="utf-8")
-
         self.provider = LLMProvider()
-        self.provider._config_path = self.test_cfg_path
-        self.provider.load_config()
-
-    def tearDown(self):
-        del self.provider
-        gc.collect()
-        self.tmpdir.cleanup()
 
     def test_resolve_default_agent_configs(self):
+<<<<<<< Updated upstream
         """Verify resolved provider endpoints match expectations."""
         oct_conf = self.provider.get_agent_resolved_config("octavious")
         self.assertEqual(oct_conf["preset"], "local")
@@ -68,6 +48,13 @@ class TestLLMProviders(unittest.TestCase):
         conf = reloaded.get_agent_resolved_config("octavious")
         self.assertEqual(conf["preset"], "cloud_free")
         self.assertEqual(conf["model"], "custom-gemma-model")
+=======
+        """Verify resolved provider endpoints match .env settings."""
+        pos_conf = self.provider.get_agent_resolved_config("poseidon")
+        self.assertEqual(pos_conf["preset"], "env")
+        self.assertIsNotNone(pos_conf["base_url"])
+        self.assertIsNotNone(pos_conf["model"])
+>>>>>>> Stashed changes
 
     def test_to_openai_messages_conversion(self):
         """Verify conversion of LangChain messages to OpenAI SDK dict format."""
@@ -86,7 +73,7 @@ class TestLLMProviders(unittest.TestCase):
     async def _run_qa_call_text(self, mock_llm_provider):
         mock_client = AsyncMock()
         mock_choice = MagicMock()
-        mock_choice.message.content = "Greetings from Octavious!"
+        mock_choice.message.content = "Greetings from Poseidon!"
         mock_choice.message.tool_calls = None
         mock_response = MagicMock(choices=[mock_choice])
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -95,14 +82,14 @@ class TestLLMProviders(unittest.TestCase):
         mock_llm_provider.get_model.return_value = "llama3.2"
 
         result = await call(
-            agent_id="octavious",
+            agent_id="poseidon",
             messages=[HumanMessage(content="Hello!")],
         )
 
         self.assertIsInstance(result, AgentResult)
-        self.assertEqual(result.content, "Greetings from Octavious!")
+        self.assertEqual(result.content, "Greetings from Poseidon!")
         self.assertIsNone(result.tool_calls)
-        self.assertEqual(str(result), "Greetings from Octavious!")
+        self.assertEqual(str(result), "Greetings from Poseidon!")
 
     def test_qa_agent_call_returns_text(self):
         """Test agent execution returning regular text response."""
@@ -126,7 +113,7 @@ class TestLLMProviders(unittest.TestCase):
         mock_llm_provider.get_model.return_value = "llama3.2"
 
         result = await call(
-            agent_id="octavious",
+            agent_id="poseidon",
             messages=[HumanMessage(content="Check my calendar")],
             tools=[{"type": "function", "function": {"name": "calendar_read"}}],
         )

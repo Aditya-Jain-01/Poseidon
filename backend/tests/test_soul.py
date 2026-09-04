@@ -18,10 +18,10 @@ class TestSoulStore(unittest.TestCase):
         self.test_agents_dir.mkdir(parents=True, exist_ok=True)
 
         # Seed prebuilt agents in test dir
-        (self.test_agents_dir / "octavious.soul.md").write_text(
-            "---\ndisplay_name: Octavious\navatar: O\ncolor: \"#39ff14\"\nrole: Personal assistant\n"
+        (self.test_agents_dir / "poseidon.soul.md").write_text(
+            "---\ndisplay_name: Poseidon\navatar: P\ncolor: \"#39ff14\"\nrole: Personal assistant\n"
             "model_preset: local\ntools:\n  - crm_read\n  - crm_write\nrouting_signals:\n  - default\n  - remind\n"
-            "is_prebuilt: true\n---\n# Octavious Persona\n\nWarm and concise right hand.",
+            "is_prebuilt: true\n---\n# Poseidon Persona\n\nWarm and concise right hand.",
             encoding="utf-8",
         )
         (self.test_agents_dir / "nereus.soul.md").write_text(
@@ -55,20 +55,20 @@ class TestSoulStore(unittest.TestCase):
         self.assertGreaterEqual(len(agents), 3)
 
         agent_ids = [a["id"] for a in agents[:3]]
-        self.assertEqual(agent_ids, ["octavious", "nereus", "kraken"])
+        self.assertEqual(agent_ids, ["poseidon", "nereus", "kraken"])
 
-        octavious = self.store.get_agent("octavious")
-        self.assertIsNotNone(octavious)
-        self.assertEqual(octavious["display_name"], "Octavious")
-        self.assertEqual(octavious["model_preset"], "local")
-        self.assertIn("crm_read", octavious["tools"])
-        self.assertTrue(octavious["is_prebuilt"])
+        poseidon = self.store.get_agent("poseidon")
+        self.assertIsNotNone(poseidon)
+        self.assertEqual(poseidon["display_name"], "Poseidon")
+        self.assertEqual(poseidon["model_preset"], "local")
+        self.assertIn("crm_read", poseidon["tools"])
+        self.assertTrue(poseidon["is_prebuilt"])
 
     def test_routing_signals_aggregation(self):
         """Verify signals are aggregated across all agents."""
         signals = self.store.get_routing_signals()
-        self.assertEqual(signals.get("default"), "octavious")
-        self.assertEqual(signals.get("remind"), "octavious")
+        self.assertEqual(signals.get("default"), "poseidon")
+        self.assertEqual(signals.get("remind"), "poseidon")
         self.assertEqual(signals.get("research"), "nereus")
         self.assertEqual(signals.get("write code"), "kraken")
 
@@ -116,14 +116,14 @@ class TestSoulStore(unittest.TestCase):
     def test_prevent_prebuilt_deletion(self):
         """Ensure prebuilt agents cannot be deleted."""
         with self.assertRaises(ValueError) as ctx:
-            self.store.delete_agent("octavious")
+            self.store.delete_agent("poseidon")
 
         self.assertIn("Cannot delete prebuilt agent", str(ctx.exception))
 
     def test_update_agent(self):
         """Ensure updates modify the soul file while preserving prebuilt flag."""
         updated = self.store.update_agent(
-            "octavious",
+            "poseidon",
             {"description": "Updated assistant description", "model_preset": "cloud_free"},
         )
         self.assertEqual(updated["description"], "Updated assistant description")

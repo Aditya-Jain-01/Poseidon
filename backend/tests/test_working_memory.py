@@ -8,6 +8,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from app.memory.episodic_store import EpisodicStore
 from app.memory.working_memory import assemble, session_store
+from app.memory.memory_engine import memory_engine
 import app.memory.working_memory as wm_module
 
 
@@ -18,12 +19,16 @@ class TestWorkingMemory(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.test_db = Path(self.tmpdir.name) / "test_state.db"
         self.test_store = EpisodicStore(db_path=self.test_db)
-        self._orig_store = wm_module.episodic_store
+        self._orig_store = memory_engine.episodic_store
+        self._orig_wm_store = getattr(wm_module, "episodic_store", None)
+        memory_engine.episodic_store = self.test_store
         wm_module.episodic_store = self.test_store
         session_store.clear()
 
     def tearDown(self):
-        wm_module.episodic_store = self._orig_store
+        memory_engine.episodic_store = self._orig_store
+        if self._orig_wm_store is not None:
+            wm_module.episodic_store = self._orig_wm_store
         session_store.clear()
         del self.test_store
         gc.collect()
@@ -37,7 +42,8 @@ class TestWorkingMemory(unittest.TestCase):
         self.assertIsInstance(messages[0], SystemMessage)
         self.assertIsInstance(messages[1], HumanMessage)
         self.assertEqual(messages[1].content, "Hello Poseidon!")
-        self.assertIn("You are Poseidon", messages[0].content)
+        # Soul is loaded from poseidon.soul.md — persona starts with "# Poseidon"
+        self.assertIn("Poseidon", messages[0].content)
 
     def test_working_memory_with_session_history(self):
         """Test that session history is preserved in correct order."""
@@ -59,6 +65,13 @@ class TestWorkingMemory(unittest.TestCase):
         # Seed episodic memory
         self.test_store.log_event("user_xyz", "user", "I am allergic to peanuts.")
         self.test_store.log_event("user_xyz", "assistant", "I will remember that you have a peanut allergy.")
+
+        # Patch retrieve to return deterministic results (real retrieve uses vector search
+        # which requires embeddings that aren't available in temp test DB)
+        self.test_store.retrieve = lambda user_id, query: [
+            {"role": "user", "content": "I am allergic to peanuts.", "created_at": "2026-01-01"},
+            {"role": "assistant", "content": "I will remember that you have a peanut allergy.", "created_at": "2026-01-01"},
+        ]
 
         messages = assemble(user_text="Can I eat peanut butter cookies?", user_id="user_xyz")
 

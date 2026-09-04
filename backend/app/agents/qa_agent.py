@@ -1,4 +1,4 @@
-"""Generic Agent Runner — Executes any agent by ID (Octavious, Nereus, Kraken, or Custom).
+"""Generic Agent Runner — Executes any agent by ID (Poseidon, or custom).
 
 Sprint 4 (Person A):
 - Dynamically binds agent persona from `soul_store`.
@@ -66,7 +66,7 @@ def _to_openai_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
 
 
 def _inject_agent_soul(agent_id: str, messages: list[BaseMessage]) -> list[BaseMessage]:
-    """Inject the agent's specific soul persona into the system message context."""
+    """Ensure system prompt contains agent persona and memory context cleanly."""
     soul_prompt = soul_store.build_system_prompt(agent_id)
     if not messages:
         return [SystemMessage(content=soul_prompt)]
@@ -74,7 +74,10 @@ def _inject_agent_soul(agent_id: str, messages: list[BaseMessage]) -> list[BaseM
     first = messages[0]
     if getattr(first, "type", "") == "system":
         content = str(first.content)
-        # If Working Memory appended persistent memory context, retain it
+        # If already hydrated with persona/memory, preserve directly
+        if soul_prompt in content:
+            return messages
+
         marker = "=== PERSISTENT MEMORY CONTEXT ==="
         if marker in content:
             _, mem_block = content.split(marker, 1)
@@ -88,15 +91,15 @@ def _inject_agent_soul(agent_id: str, messages: list[BaseMessage]) -> list[BaseM
 
 
 async def call(
-    agent_id: str | list[BaseMessage] = "octavious",
+    agent_id: str | list[BaseMessage] = "poseidon",
     messages: list[BaseMessage] | None = None,
     tools: list[dict[str, Any]] | None = None,
 ) -> AgentResult:
     """Execute inference for the specified agent.
 
     Args:
-        agent_id: Identifier of the agent (e.g., 'octavious', 'nereus', 'kraken', or custom).
-                  If a list of messages is passed as first argument, defaults to 'octavious'.
+        agent_id: Identifier of the agent (e.g., 'poseidon', or custom).
+                  If a list of messages is passed as first argument, defaults to 'poseidon'.
         messages: List of conversation messages.
         tools: Optional list of OpenAI-formatted tool schemas.
 
@@ -106,17 +109,20 @@ async def call(
     # Backward compatibility: call(messages)
     if isinstance(agent_id, list):
         messages = agent_id
-        agent_id = "octavious"
+        agent_id = "poseidon"
 
-    aid = (agent_id or "octavious").lower()
+    aid = (agent_id or "poseidon").lower()
     raw_messages = messages or []
 
     # Inject agent soul persona
     context_messages = _inject_agent_soul(aid, raw_messages)
     openai_msgs = _to_openai_messages(context_messages)
 
+    conf = llm_provider.get_agent_resolved_config(aid)
     client = llm_provider.get_client(aid)
-    model = llm_provider.get_model(aid)
+    model = conf.get("model") or llm_provider.get_model(aid)
+    base_url = conf.get("base_url", "")
+    preset = conf.get("preset", "")
 
     kwargs: dict[str, Any] = {
         "model": model,
@@ -131,11 +137,17 @@ async def call(
         response = await client.chat.completions.create(**kwargs)
     except Exception as e:
         err_text = str(e)
-        if "Connection refused" in err_text or "11434" in err_text:
-            raise RuntimeError(
-                f"[{aid.capitalize()}] Could not connect to local Ollama server. "
-                "Ensure Ollama is running or switch this agent to Cloud Free in Settings."
-            ) from e
+        if "Connection" in err_text or "connect" in err_text.lower() or "11434" in err_text:
+            if preset == "local" or "11434" in base_url or "localhost" in base_url:
+                raise RuntimeError(
+                    f"[{aid.capitalize()}] Could not connect to local Ollama server at {base_url}. "
+                    "Ensure Ollama is running (`ollama serve`) or switch to Cloud Free in Settings."
+                ) from e
+            else:
+                raise RuntimeError(
+                    f"[{aid.capitalize()}] Could not connect to inference endpoint '{base_url}' with model '{model}': {err_text}. "
+                    "Check network access or API credentials."
+                ) from e
         raise RuntimeError(f"[{aid.capitalize()}] Inference failed with model '{model}': {err_text}") from e
 
     choice = response.choices[0]

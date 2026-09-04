@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     poseidon_outbound_msg_rate_limit: int = Field(20)
     poseidon_cronjob_approval_timeout_hours: int = Field(12)
 
+    # Telegram Gateway Adapter (Local Long-Polling & Webhooks)
+    telegram_bot_token: str = Field(default="", description="Telegram Bot API Token")
+    telegram_allowed_user_ids: str = Field(default="", description="Comma-separated allowed Telegram user IDs")
+    telegram_webhook_secret: str = Field(default="", description="Optional secret token for webhook verification")
+    telegram_polling_enabled: bool = Field(default=False, description="Enable local long-polling runner if token present")
+
     # Memory & Agents
     poseidon_consolidation_threshold: int = Field(30)
     poseidon_db_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "state.db")

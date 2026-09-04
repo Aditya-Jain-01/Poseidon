@@ -1,16 +1,34 @@
-"""Central tool definitions.  Unknown tools always require approval."""
+"""Central tool definitions with MCP discovery and sandboxed execution.
+
+All tools (native and MCP) share this unified interface and least-privilege boundary.
+"""
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable
 from app.soul import soul_store
+from app.security.sandbox import SandboxGuard
 from . import calendar, crm, notes_reminders, skill_manage
+from .mcp_manager import mcp_manager
 
 
 def _schema(name: str, description: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
-    return {"type": "function", "function": {"name": name, "description": description, "parameters": {"type": "object", "properties": properties, "required": required or [], "additionalProperties": False}}}
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required or [],
+                "additionalProperties": False,
+            },
+        },
+    }
 
 
-TOOL_REGISTRY: dict[str, dict[str, Any]] = {
+BASE_TOOL_REGISTRY: dict[str, dict[str, Any]] = {
     "crm_read": {"tier": "auto", "handler": crm.crm_read, "schema": _schema("crm_read", "Search local CRM contacts.", {"query": {"type": "string"}})},
     "crm_write": {"tier": "approval_required", "handler": crm.crm_write, "schema": _schema("crm_write", "Create, update, or delete a local CRM contact.", {"action": {"type": "string", "enum": ["create", "update", "delete"]}, "contact": {"type": "object"}, "contact_id": {"type": "string"}}, ["action"])},
     "notes_reminders_read": {"tier": "auto", "handler": notes_reminders.notes_reminders_read, "schema": _schema("notes_reminders_read", "Read local notes and reminders.", {"query": {"type": "string"}})},
@@ -23,22 +41,42 @@ TOOL_REGISTRY: dict[str, dict[str, Any]] = {
 }
 
 
+def get_all_tools() -> dict[str, dict[str, Any]]:
+    """Return merged registry of base native tools and discovered MCP tools."""
+    tools = dict(BASE_TOOL_REGISTRY)
+    discovered = mcp_manager.discover_tools()
+    tools.update(discovered)
+    return tools
+
+
 def get_tier(tool_name: str) -> str:
-    return TOOL_REGISTRY.get(tool_name, {}).get("tier", "approval_required")
+    tool = get_all_tools().get(tool_name)
+    return tool.get("tier", "approval_required") if tool else "approval_required"
 
 
 def get_tool(tool_name: str) -> dict[str, Any] | None:
-    return TOOL_REGISTRY.get(tool_name)
+    return get_all_tools().get(tool_name)
 
 
-def get_tools_for_agent(agent_id: str) -> list[dict[str, Any]]:
+def get_tools_for_agent(agent_id: str = "poseidon") -> list[dict[str, Any]]:
+    """Return tool schemas available for the agent."""
+    all_tools = get_all_tools()
     agent = soul_store.get_agent(agent_id)
-    names = agent.get("tools", []) if agent else []
-    return [TOOL_REGISTRY[name]["schema"] for name in names if name in TOOL_REGISTRY]
+    if agent and agent.get("tools"):
+        names = agent.get("tools", [])
+        return [all_tools[name]["schema"] for name in names if name in all_tools]
+    # Default: all registered tools
+    return [t["schema"] for t in all_tools.values()]
 
 
-def execute_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+async def execute_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
+    """Execute a tool within the in-process SandboxGuard least-privilege boundary."""
     tool = get_tool(tool_name)
     if not tool:
         raise ValueError(f"Unknown tool: {tool_name}")
-    return tool["handler"](**(arguments or {}))
+
+    args = arguments or {}
+    handler = tool["handler"]
+
+    # Sandboxed execution with timeout and path jailing
+    return await SandboxGuard.execute(tool_name, handler, args)
