@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Cpu, ShieldCheck, Activity, Layers, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Download, RotateCw, PanelRight, PanelRightClose, Terminal } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
 import TrajectoryView from '../TrajectoryView/TrajectoryView';
-import ApprovalCard from '../ApprovalCard/ApprovalCard';
 import './ChatDock.css';
 
 function getGreeting() {
@@ -16,7 +15,7 @@ function getGreeting() {
 }
 
 /**
- * Centered Chat, Trajectory & Security Canvas view
+ * Centered Developer Console Canvas view (DeepSeek Harness inspired)
  */
 export function ChatDock() {
   const {
@@ -29,29 +28,21 @@ export function ChatDock() {
     toggleOverview,
   } = useChat();
 
+  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'trajectory'
+
   const greeting = getGreeting();
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'trajectory' | 'security'
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
-  const sessionTitle = activeSession?.title || 'New Session';
+  const sessionTitle = activeSession?.title || 'First prompt session';
 
-  // Live approval requests from current messages
-  const liveApprovalMsg = messages?.slice().reverse().find((m) => m.approvalRequest);
-  const liveApproval = liveApprovalMsg?.approvalRequest;
-
-  // Reset tab to chat when active session changes
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    setActiveTab('chat');
-  }, [activeSessionId]);
-
-  // Auto-scroll to bottom when new messages arrive in chat tab
-  useEffect(() => {
-    if (activeTab === 'chat' && messagesEndRef.current) {
+    if (activeView === 'chat' && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading, activeTab]);
+  }, [messages, isLoading, activeView]);
 
   const isEmpty = messages.length === 0;
 
@@ -73,120 +64,113 @@ export function ChatDock() {
   };
 
   return (
-    <div className={`chat-canvas ${isEmpty && activeTab === 'chat' ? 'is-empty-hero' : ''}`}>
-      {/* Subheader with Chat, Trajectory, Security Gate, and Topology tabs */}
-      {(!isEmpty || activeTab !== 'chat') && (
-        <div className="chat-canvas-subheader">
-          <div className="subheader-left">
-            <div className="subheader-title-row">
-              <span className="session-heading-title">{sessionTitle}</span>
-              <span className="session-mode-badge">
-                <Cpu size={12} className="mode-badge-icon" />
-                <span>Standard mode</span>
-              </span>
-            </div>
+    <div className={`chat-canvas ${isEmpty && activeView === 'chat' ? 'is-empty-hero' : ''}`}>
+      {/* Consolidated Top Status Ribbon */}
+      <div className="chat-canvas-status-ribbon">
+        {/* Left: POSEIDON // SESSION-XXXXXXXX (Mono) */}
+        <div className="status-ribbon-left">
+          <span className="ribbon-session-brand">
+            POSEIDON // {activeSessionId ? `SESSION-${activeSessionId.slice(0, 8).toUpperCase()}` : 'SESSION-LIVE'}
+          </span>
+        </div>
 
-            <div className="subheader-tabs-row">
-              <button 
-                className={`subheader-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
-                onClick={() => setActiveTab('chat')}
-              >
-                Chat
-              </button>
-              <button 
-                className={`subheader-tab-btn ${activeTab === 'trajectory' ? 'active' : ''}`}
-                onClick={() => setActiveTab('trajectory')}
-              >
-                Trajectory
-              </button>
-              <button 
-                className={`subheader-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
-                onClick={() => setActiveTab('security')}
-              >
-                Security Gate
-              </button>
-              <button 
-                className={`subheader-tab-btn topology-side-btn ${isOverviewOpen ? 'active' : ''}`}
-                onClick={toggleOverview}
-                title="Toggle Architecture &amp; Topology CAD in right side window"
-              >
-                Topology
-              </button>
-            </div>
-          </div>
-
-          <div className="subheader-right">
-            <button 
-              className="session-log-btn"
-              onClick={handleExportSessionLog}
-              title="Export session execution log"
+        {/* Center: Minimal pill toggle for [ CHAT ] and [ TRAJECTORY ] */}
+        <div className="status-ribbon-center">
+          <div className="ribbon-view-pill">
+            <button
+              type="button"
+              className={`view-pill-btn ${activeView === 'chat' ? 'active' : ''}`}
+              onClick={() => setActiveView('chat')}
             >
-              <span>Session log</span>
-              <Download size={12} />
+              CHAT
+            </button>
+            <button
+              type="button"
+              className={`view-pill-btn ${activeView === 'trajectory' ? 'active' : ''}`}
+              onClick={() => setActiveView('trajectory')}
+            >
+              TRAJECTORY
             </button>
           </div>
         </div>
-      )}
 
-      {/* Main Content Area: Chat, Trajectory, or Security Gate */}
-      {activeTab === 'trajectory' ? (
-        <TrajectoryView messages={messages} sessionTitle={sessionTitle} />
-      ) : activeTab === 'security' ? (
-        /* Security Gate & Taint Inspector View */
-        <div className="workspace-security-view animate-fade-in">
-          <div className="security-view-header">
-            <div className="security-header-info">
-              <span className="security-title">Security Gate &amp; Taint Inspector</span>
-              <span className="security-subtitle">Human-in-the-loop parameter verification and untrusted origin taint tracking</span>
-            </div>
+        {/* Right: Status indicator dot with READY and quick buttons [ LOG ] [ INSPECTOR ] */}
+        <div className="status-ribbon-right">
+          <div className="ribbon-status-indicator" title="System Status: Ready">
+            <span className="ribbon-status-dot" />
+            <span className="ribbon-status-text">READY</span>
           </div>
 
-          <div className="security-cards-container">
-            {liveApproval ? (
-              <div className="live-approval-section">
-                <div className="section-gate-badge">
-                  <ShieldAlert size={14} />
-                  <span>ACTIVE LIVE APPROVAL REQUIRED</span>
-                </div>
-                <ApprovalCard
-                  approvalId={liveApproval.id || 'live-gate-1'}
-                  toolName={liveApproval.tool}
-                  arguments={liveApproval.args || {}}
-                  diff={liveApproval.diff || {}}
-                  dangerousParams={liveApproval.dangerous_params || []}
-                  warnings={liveApproval.warnings || ['Live tool execution approval required before dispatch.']}
-                  riskLevel={liveApproval.risk_level || 'high'}
-                  isTainted={liveApproval.is_tainted || false}
-                  onApprove={() => alert('Tool action approved.')}
-                  onDeny={() => alert('Tool action denied.')}
-                />
-              </div>
-            ) : (
-              <div className="empty-security-gate-view">
-                <ShieldCheck size={38} className="empty-shield-icon" />
-                <h3 className="empty-security-title">No security evaluations pending</h3>
-                <p className="empty-security-desc">
-                  Human-in-the-loop security gate is armed. Tainted inputs, high-risk operations, or tool parameter overrides will generate verification cards here.
-                </p>
-                <div className="security-standby-pill">
-                  <span className="standby-dot" />
-                  <span>Gate Armed · 0 Taint Alerts</span>
-                </div>
-              </div>
-            )}
-          </div>
+          <button 
+            type="button"
+            className="ribbon-pill-btn"
+            onClick={handleExportSessionLog}
+            title="Export session execution log"
+          >
+            <Download size={11} />
+            <span>LOG</span>
+          </button>
+
+          <button
+            type="button"
+            className={`ribbon-pill-btn ${isOverviewOpen ? 'is-active' : ''}`}
+            onClick={toggleOverview}
+            title={isOverviewOpen ? 'Hide Inspector Panel' : 'Show Inspector Panel'}
+          >
+            {isOverviewOpen ? <PanelRightClose size={11} /> : <PanelRight size={11} />}
+            <span>INSPECTOR</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main View: Trajectory View vs Conversation Stream */}
+      {activeView === 'trajectory' ? (
+        <div className="chat-canvas-trajectory-view animate-fade-in">
+          <TrajectoryView messages={messages} sessionTitle={sessionTitle} />
         </div>
       ) : isEmpty ? (
-        /* Empty Execution Workspace Hero */
+        /* Empty Execution Workspace Hero — Three-Layer Rule (Section 2.1) */
         <div className="chat-hero-container animate-fade-in">
-          {/* Subtle Ocean Atmospheric Glow Layer */}
-          <div className="ocean-depth-aura" aria-hidden="true" />
+          {/* Layer 3: Top Instrument Tag (ALL CAPS Space Mono) */}
+          <div className="hero-badge">
+            <span className="hero-badge-status-dot" />
+            <span>POSEIDON // COGNITIVE COCKPIT</span>
+          </div>
 
-          <h1 className="hero-title">{greeting}</h1>
+          {/* Layer 1: The ONE Thing (Section 2.1 Display Size with 48–64px breathing room) */}
+          <h1 className="hero-title font-display">POSEIDON // 01</h1>
+          <p className="hero-subtitle">
+            Autonomous agent harness with 4-tier cognitive memory and sandboxed tool execution.
+          </p>
+
+          {/* Layer 2: Supporting Context (Quick Action Pills) */}
+          <div className="hero-quick-commands">
+            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/memory')}>
+              /memory · Inspect facts
+            </button>
+            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/status')}>
+              /status · Health check
+            </button>
+            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/skills')}>
+              /skills · List playbooks
+            </button>
+            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/clear')}>
+              /clear · Fresh session
+            </button>
+          </div>
 
           {/* Centered Command Input Bar */}
           <div className="hero-input-wrapper">
             <MessageInput onSend={sendMessage} disabled={isLoading} isHero={true} />
+          </div>
+
+          {/* Layer 3: Peripheral System Metadata (Pushed to bottom) */}
+          <div className="hero-bottom-metadata nothing-label">
+            <span>[ SYSTEM: READY ]</span>
+            <span className="metadata-dot">·</span>
+            <span>[ 4-TIER COGNITION ]</span>
+            <span className="metadata-dot">·</span>
+            <span>[ SANDBOX: ACTIVE ]</span>
           </div>
         </div>
       ) : (
