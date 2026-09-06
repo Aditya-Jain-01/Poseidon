@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.llm_providers import LLMProvider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
 from app.agents.qa_agent import call, AgentResult, _to_openai_messages
@@ -74,13 +74,26 @@ class TestLLMProviders(unittest.TestCase):
         messages = [
             SystemMessage(content="System instruction"),
             HumanMessage(content="User query"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "calendar_read", "args": {"date": "today"}, "id": "call_1", "type": "tool_call"}
+                ],
+            ),
         ]
         converted = _to_openai_messages(messages)
-        self.assertEqual(len(converted), 2)
+        self.assertEqual(len(converted), 3)
         self.assertEqual(converted[0]["role"], "system")
         self.assertEqual(converted[0]["content"], "System instruction")
         self.assertEqual(converted[1]["role"], "user")
         self.assertEqual(converted[1]["content"], "User query")
+        self.assertEqual(converted[2]["role"], "assistant")
+        self.assertEqual(len(converted[2]["tool_calls"]), 1)
+        tc = converted[2]["tool_calls"][0]
+        self.assertEqual(tc["type"], "function")
+        self.assertEqual(tc["id"], "call_1")
+        self.assertEqual(tc["function"]["name"], "calendar_read")
+        self.assertEqual(tc["function"]["arguments"], json.dumps({"date": "today"}))
 
     @patch("app.agents.qa_agent.llm_provider")
     async def _run_qa_call_text(self, mock_llm_provider):

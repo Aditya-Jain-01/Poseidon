@@ -218,7 +218,8 @@ class MemoryEngine:
     def _maybe_trigger_consolidation(self, user_id: str) -> None:
         """Trigger background consolidation if unconsolidated exchange count exceeds threshold."""
         try:
-            unconsolidated = self.episodic_store.get_unconsolidated_events(limit=50)
+            from app.memory.consolidation import get_unconsolidated_events
+            unconsolidated = get_unconsolidated_events(user_id=user_id, limit=50)
             threshold = getattr(settings, "poseidon_consolidation_threshold", 30)
             if len(unconsolidated) >= threshold:
                 from app.agents.summarizer_agent import summarize_and_consolidate

@@ -48,10 +48,43 @@ def _to_openai_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
             result.append({"role": "user", "content": str(msg.content)})
         elif msg_type in ("ai", "assistant"):
             entry: dict[str, Any] = {"role": "assistant", "content": str(msg.content or "")}
-            # Preserve tool calls if message had them
+            # Preserve tool calls if message had them, strictly in OpenAI SDK format
             raw_tool_calls = getattr(msg, "tool_calls", None) or getattr(msg, "additional_kwargs", {}).get("tool_calls")
             if raw_tool_calls:
-                entry["tool_calls"] = raw_tool_calls
+                formatted_calls = []
+                for tc in raw_tool_calls:
+                    if not isinstance(tc, dict):
+                        continue
+                    if "function" in tc and tc.get("type") == "function":
+                        fn_obj = tc["function"]
+                        fn_args = fn_obj.get("arguments", "{}")
+                        if not isinstance(fn_args, str):
+                            fn_args = json.dumps(fn_args)
+                        formatted_calls.append({
+                            "id": str(tc.get("id") or "call_0"),
+                            "type": "function",
+                            "function": {
+                                "name": fn_obj.get("name", ""),
+                                "arguments": fn_args,
+                            },
+                        })
+                    else:
+                        fn_name = tc.get("name") or (tc.get("function", {}).get("name") if isinstance(tc.get("function"), dict) else "")
+                        fn_args = tc.get("args") if "args" in tc else (
+                            tc.get("function", {}).get("arguments") if isinstance(tc.get("function"), dict) else tc.get("arguments", {})
+                        )
+                        if not isinstance(fn_args, str):
+                            fn_args = json.dumps(fn_args)
+                        formatted_calls.append({
+                            "id": str(tc.get("id") or fn_name or "call_0"),
+                            "type": "function",
+                            "function": {
+                                "name": fn_name,
+                                "arguments": fn_args,
+                            },
+                        })
+                if formatted_calls:
+                    entry["tool_calls"] = formatted_calls
             result.append(entry)
         elif msg_type == "tool":
             result.append({
