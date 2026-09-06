@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     poseidon_outbound_msg_rate_limit: int = Field(20)
     poseidon_cronjob_approval_timeout_hours: int = Field(12)
 
+    # Note Guardrails (guarded_auto tier)
+    poseidon_note_max_length: int = Field(500, description="Max character length for a single note/reminder.")
+    poseidon_note_max_total: int = Field(500, description="Max total notes + reminders in storage.")
+
+    # Operator PIN — used for step-up verification on suspicious note approvals
+    # and future Telegram approval hardening.  Leave empty to disable PIN check.
+    poseidon_operator_pin: str = Field(default="", description="Optional operator PIN for step-up approval verification.")
+
     # Telegram Gateway Adapter (Local Long-Polling & Webhooks)
     telegram_bot_token: str = Field(default="", description="Telegram Bot API Token")
     telegram_allowed_user_ids: str = Field(default="", description="Comma-separated allowed Telegram user IDs")

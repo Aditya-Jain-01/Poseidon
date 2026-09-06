@@ -83,3 +83,4 @@ Every approval decision — granted, denied, or expired/timed-out — is written
 | Date | Change | Approved By |
 |---|---|---|
 | 2026-08-23 | Initial policy created from operator's pre-build addendum | Operator (pre-build Q&A) |
+| 2026-09-07 | `notes_reminders_create` promoted from `approval_required` to `guarded_auto`. Clean, benign text auto-runs with no human approval. Content matching credential references, external URLs, or injection patterns triggers step-up approval via the existing ApprovalCard gate. Blatant adversarial payloads (jailbreaks, shell commands, prompt delimiters) are hard-rejected with no approval offered. `notes_reminders_delete` remains strictly `approval_required`. Change is scoped exclusively to this one tool. NoteGuard validator and `SuspiciousNoteError` sentinel implemented in `backend/app/security/note_guard.py`. | Operator |
