@@ -78,10 +78,56 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         print(f"[TelegramAdapter] Dropped message from unauthorized user ID: {sender_id}")
         return {"status": "rejected", "reason": f"Unauthorized user: {sender_id}"}
 
-    # 2. Normalize to InboundEvent
+    # 2. Check for pending approval resolution
+    user_id = f"telegram_{sender_id}"
+    token = bot_token or getattr(settings, "telegram_bot_token", "")
+
+    from app.orchestration.approval_store import approval_store
+    from app.orchestration.graph import resume_approval
+
+    pending = approval_store.get_pending_for_user(user_id)
+    if pending:
+        clean = text.strip().lower()
+        pin = getattr(settings, "poseidon_operator_pin", "").strip()
+
+        # Handle denial
+        if clean in {"/deny", "deny", "no", "cancel", "reject", "abort"}:
+            res = await resume_approval(pending["id"], "denied")
+            reply_text = res.get("reply", "Action denied. No changes were made.")
+            if token and chat_id:
+                await send_telegram_reply(token, chat_id, reply_text)
+            return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
+
+        # Handle approval
+        approved = False
+        if pin:
+            if text.strip() == pin or clean == f"/approve {pin}".lower() or clean == f"approve {pin}".lower():
+                approved = True
+            elif clean in {"/approve", "approve", "yes", "confirm", "y", "proceed"}:
+                reply_text = "🔒 Operator PIN required. Reply with your PIN to approve this action, or 'deny' to cancel."
+                if token and chat_id:
+                    await send_telegram_reply(token, chat_id, reply_text)
+                return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
+            else:
+                reply_text = f"🔒 Incorrect PIN or invalid response for pending approval '{pending['tool_name']}'. Reply with your operator PIN to approve, or 'deny' to cancel."
+                if token and chat_id:
+                    await send_telegram_reply(token, chat_id, reply_text)
+                return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
+        else:
+            if clean in {"/approve", "approve", "yes", "confirm", "y", "ok", "proceed"}:
+                approved = True
+
+        if approved:
+            res = await resume_approval(pending["id"], "approved")
+            reply_text = res.get("reply", "Action approved and executed.")
+            if token and chat_id:
+                await send_telegram_reply(token, chat_id, reply_text)
+            return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
+
+    # 3. Normalize to InboundEvent
     tainted = is_channel_untrusted("telegram")
     event = InboundEvent(
-        user_id=f"telegram_{sender_id}",
+        user_id=user_id,
         channel="telegram",
         channel_thread_id=f"telegram_{chat_id}",
         text=text,
@@ -90,7 +136,7 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         taint_sources=["telegram"] if tainted else [],
     )
 
-    # 3. Invoke Agent Harness
+    # 4. Invoke Agent Harness
     from app.orchestration.router import route_request
 
     target_agent = route_request(text)
@@ -98,8 +144,13 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
     result = await run_agent(event, run_id=run_id, agent_id=target_agent)
     reply_text = result.get("reply") or ""
 
-    # 4. Outbound delivery back to Telegram
-    token = bot_token or getattr(settings, "telegram_bot_token", "")
+    if result.get("approval_request"):
+        tool_name = result["approval_request"].get("tool_name", "this action")
+        pin = getattr(settings, "poseidon_operator_pin", "").strip()
+        auth_hint = "your Operator PIN" if pin else "'yes' or '/approve'"
+        reply_text = f"⚠️ Approval Required: {tool_name} requires confirmation.\n\nReply with {auth_hint} to proceed, or 'deny' to cancel."
+
+    # 5. Outbound delivery back to Telegram
     if token and chat_id:
         await send_telegram_reply(token, chat_id, reply_text)
 
