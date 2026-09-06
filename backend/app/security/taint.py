@@ -49,12 +49,19 @@ BASE_AUTORUN_TOOLS = {
     "skill_manage_read",
 }
 
+BASE_GUARDED_AUTO_TOOLS = {
+    # These tools run automatically for benign input but dynamically escalate
+    # to the approval gate when their internal NoteGuard validator flags
+    # suspicious content (credentials, URLs, injection patterns).
+    # They are NOT in BASE_APPROVAL_REQUIRED_TOOLS — routing is adaptive.
+    "notes_reminders_create",
+}
+
 BASE_APPROVAL_REQUIRED_TOOLS = {
     "crm_write",
     "calendar_create",
     "calendar_update",
     "calendar_delete",
-    "notes_reminders_create",
     "notes_reminders_update",
     "notes_reminders_delete",
     "cronjob",
