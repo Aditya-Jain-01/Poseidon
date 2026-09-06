@@ -36,9 +36,18 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self._patcher = patch("app.soul._get_agents_dir", return_value=self.agents_dir)
         self._patcher.start()
 
+        self.tmp_config = Path(self.tmpdir.name) / "llm_config.json"
+        from app.llm_providers import llm_provider
+        self._orig_llm_config_path = llm_provider._config_path
+        self._orig_agent_overrides = {k: dict(v) for k, v in llm_provider._agent_overrides.items()}
+        llm_provider._config_path = self.tmp_config
+
         self.client = TestClient(app)
 
     def tearDown(self):
+        from app.llm_providers import llm_provider
+        llm_provider._config_path = self._orig_llm_config_path
+        llm_provider._agent_overrides = self._orig_agent_overrides
         self._patcher.stop()
         agents_adapter_module.soul_store = self._orig_soul
         self.tmpdir.cleanup()

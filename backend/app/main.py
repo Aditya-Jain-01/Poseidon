@@ -50,20 +50,14 @@ app.include_router(trajectory_router)
 
 @app.get("/health")
 async def health():
-<<<<<<< Updated upstream
-    primary = llm_provider.get_agent_resolved_config("octavious")
+    primary = llm_provider.get_agent_resolved_config("poseidon")
     return {
         "status": "ok",
-        "model": primary["model"],
-        "provider": primary["preset"],
-        "configured": primary["has_api_key"],
-=======
-    return {
-        "status": "ok",
-        "model": settings.poseidon_model,
+        "model": primary.get("model", settings.poseidon_model),
+        "provider": primary.get("preset", "env"),
+        "configured": primary.get("has_api_key", False),
         "mode": "local-first",
         "telegram_polling": settings.telegram_polling_enabled and bool(settings.telegram_bot_token),
->>>>>>> Stashed changes
     }
 
 

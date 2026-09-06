@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.llm_providers import LLMProvider
+from app.llm_providers import LLMProvider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
 from app.agents.qa_agent import call, AgentResult, _to_openai_messages
 
 
@@ -16,15 +16,35 @@ class TestLLMProviders(unittest.TestCase):
     """Test suite for per-agent LLM providers and the generic agent runner."""
 
     def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.test_cfg_path = Path(self.tmpdir.name) / "llm_config.json"
+
+        # Write test config
+        test_payload = {
+            "providers": DEFAULT_PROVIDERS,
+            "agent_overrides": {
+                "poseidon": {"preset": "env"},
+                "nereus": {"preset": "cloud_free"},
+                "kraken": {"preset": "cloud_free"},
+            },
+        }
+        self.test_cfg_path.write_text(json.dumps(test_payload), encoding="utf-8")
+
         self.provider = LLMProvider()
+        self.provider._config_path = self.test_cfg_path
+        self.provider.load_config()
+
+    def tearDown(self):
+        del self.provider
+        gc.collect()
+        self.tmpdir.cleanup()
 
     def test_resolve_default_agent_configs(self):
-<<<<<<< Updated upstream
-        """Verify resolved provider endpoints match expectations."""
-        oct_conf = self.provider.get_agent_resolved_config("octavious")
-        self.assertEqual(oct_conf["preset"], "local")
-        self.assertEqual(oct_conf["base_url"], "http://localhost:11434/v1")
-        self.assertEqual(oct_conf["model"], "llama3.2")
+        """Verify resolved provider endpoints match .env settings and agent definitions."""
+        pos_conf = self.provider.get_agent_resolved_config("poseidon")
+        self.assertEqual(pos_conf["preset"], "env")
+        self.assertIsNotNone(pos_conf["base_url"])
+        self.assertIsNotNone(pos_conf["model"])
 
         nereus_conf = self.provider.get_agent_resolved_config("nereus")
         self.assertEqual(nereus_conf["preset"], "cloud_free")
@@ -34,7 +54,7 @@ class TestLLMProviders(unittest.TestCase):
     def test_update_agent_provider(self):
         """Verify dynamically reassigning an agent's provider."""
         updated = self.provider.update_provider(
-            "octavious",
+            "poseidon",
             preset="cloud_free",
             model="custom-gemma-model",
         )
@@ -45,16 +65,9 @@ class TestLLMProviders(unittest.TestCase):
         reloaded = LLMProvider()
         reloaded._config_path = self.test_cfg_path
         reloaded.load_config()
-        conf = reloaded.get_agent_resolved_config("octavious")
+        conf = reloaded.get_agent_resolved_config("poseidon")
         self.assertEqual(conf["preset"], "cloud_free")
         self.assertEqual(conf["model"], "custom-gemma-model")
-=======
-        """Verify resolved provider endpoints match .env settings."""
-        pos_conf = self.provider.get_agent_resolved_config("poseidon")
-        self.assertEqual(pos_conf["preset"], "env")
-        self.assertIsNotNone(pos_conf["base_url"])
-        self.assertIsNotNone(pos_conf["model"])
->>>>>>> Stashed changes
 
     def test_to_openai_messages_conversion(self):
         """Verify conversion of LangChain messages to OpenAI SDK dict format."""

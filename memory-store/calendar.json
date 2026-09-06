@@ -55,6 +55,34 @@
       "starts_at": "2026-09-05T14:00:00Z",
       "ends_at": null,
       "description": ""
+    },
+    {
+      "id": "5a925e61-8b60-4234-9d84-b738cfd970ff",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
+    },
+    {
+      "id": "2c5030d6-be75-4ca6-8bd8-e4dc0cacad62",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
+    },
+    {
+      "id": "92281a6a-7314-4a54-819f-450049d2e59b",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
+    },
+    {
+      "id": "4e860d22-08f6-4684-8b18-1001861ae378",
+      "title": "Design Sync",
+      "starts_at": "2026-09-05T14:00:00Z",
+      "ends_at": null,
+      "description": ""
     }
   ]
 }

@@ -91,8 +91,11 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
     )
 
     # 3. Invoke Agent Harness
+    from app.orchestration.router import route_request
+
+    target_agent = route_request(text)
     run_id = str(uuid4())
-    result = await run_agent(event, run_id=run_id)
+    result = await run_agent(event, run_id=run_id, agent_id=target_agent)
     reply_text = result.get("reply") or ""
 
     # 4. Outbound delivery back to Telegram

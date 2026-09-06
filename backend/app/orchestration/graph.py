@@ -167,8 +167,13 @@ def _initial_state(event: InboundEvent, run_id: str, agent_id: str = DEFAULT_PRI
     }
 
 
-async def run_agent(event: InboundEvent, run_id: str, agent_id: str = DEFAULT_PRIMARY_AGENT) -> dict[str, Any]:
+async def run_agent(event: InboundEvent, run_id: str, agent_id: str | None = None) -> dict[str, Any]:
     """Execute one full turn of the agent harness."""
+    if not agent_id:
+        from app.orchestration.router import route_request
+        agent_id = route_request(event.text, default_agent=DEFAULT_PRIMARY_AGENT)
+
+    trajectory_store.record(run_id, "route", agent_id=agent_id)
     result = await graph.ainvoke(_initial_state(event, run_id, agent_id))
     pending = result.get("pending_approvals", [])
     raw = "Awaiting your approval to continue." if pending else str(result["messages"][-1].content)

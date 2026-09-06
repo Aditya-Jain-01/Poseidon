@@ -85,3 +85,93 @@ def test_telegram_webhook_secret_header_verification():
                 headers={"X-Telegram-Bot-Api-Secret-Token": "super_secret_token"},
             )
             assert resp_valid.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_telegram_routes_to_poseidon_env_by_default():
+    """Verify normal Telegram message routes to Poseidon and resolves to .env provider."""
+    from app.llm_providers import llm_provider
+
+    fake_update = {
+        "update_id": 2001,
+        "message": {
+            "message_id": 10,
+            "from": {"id": 12345, "first_name": "ValidUser"},
+            "chat": {"id": 12345, "type": "private"},
+            "text": "What is the status of my tasks?",
+        },
+    }
+
+    with patch.object(settings, "telegram_allowed_user_ids", "12345"):
+        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {"reply": "All tasks on schedule.", "active_agent": "poseidon"}
+            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+                result = await process_telegram_update(fake_update, bot_token="fake_token")
+                assert result.get("status") == "processed"
+                assert mock_run.called
+
+                # Check agent_id argument passed to run_agent
+                _, kwargs = mock_run.call_args
+                assert kwargs.get("agent_id") == "poseidon"
+
+    # Verify poseidon provider resolves to .env settings (OpenRouter)
+    pos_conf = llm_provider.get_agent_resolved_config("poseidon")
+    assert pos_conf["preset"] == "env"
+    assert pos_conf["base_url"] == settings.poseidon_base_url
+    assert pos_conf["model"] == settings.poseidon_model
+    assert pos_conf["has_api_key"] is True
+
+
+@pytest.mark.asyncio
+async def test_telegram_explicit_agent_selection_and_local_provider():
+    """Verify explicit agent selection routes correctly, and local agent resolves to Ollama."""
+    from app.llm_providers import llm_provider
+
+    # 1. Test explicit @octavious selection
+    update_oct = {
+        "update_id": 2002,
+        "message": {
+            "message_id": 11,
+            "from": {"id": 12345, "first_name": "ValidUser"},
+            "chat": {"id": 12345, "type": "private"},
+            "text": "@octavious check local system",
+        },
+    }
+
+    with patch.object(settings, "telegram_allowed_user_ids", "12345"):
+        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {"reply": "Local system checked.", "active_agent": "octavious"}
+            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+                result = await process_telegram_update(update_oct, bot_token="fake_token")
+                assert result.get("status") == "processed"
+                _, kwargs = mock_run.call_args
+                assert kwargs.get("agent_id") == "octavious"
+
+    # 2. Test explicit /agent octavious command
+    update_cmd = {
+        "update_id": 2003,
+        "message": {
+            "message_id": 12,
+            "from": {"id": 12345, "first_name": "ValidUser"},
+            "chat": {"id": 12345, "type": "private"},
+            "text": "/agent octavious run diagnostic",
+        },
+    }
+
+    with patch.object(settings, "telegram_allowed_user_ids", "12345"):
+        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = {"reply": "Diagnostic complete.", "active_agent": "octavious"}
+            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+                result = await process_telegram_update(update_cmd, bot_token="fake_token")
+                assert result.get("status") == "processed"
+                _, kwargs = mock_run.call_args
+                assert kwargs.get("agent_id") == "octavious"
+
+    # 3. Verify local/Ollama provider resolution still works for octavious or local preset
+    with patch.dict(llm_provider._agent_overrides, {"octavious": {"preset": "local"}}):
+        oct_conf = llm_provider.get_agent_resolved_config("octavious")
+        assert oct_conf["preset"] == "local"
+        assert oct_conf["base_url"] == "http://localhost:11434/v1"
+        assert oct_conf["model"] == "llama3.2"
+        assert oct_conf["api_key"] == "ollama"
+

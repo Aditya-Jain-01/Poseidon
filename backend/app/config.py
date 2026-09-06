@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", description="OpenRouter API key")
     nvidia_api_key: str = Field(default="", description="NVIDIA NIM API key")
     kraken_api_key: str = Field(default="", description="Kraken / OpenAI subscription API key")
+    poseidon_api_key: str = Field(default="", description="Direct Poseidon fallback API key")
     poseidon_model: str = Field("nvidia/nemotron-3-ultra-550b-a55b", description="Default fallback model identifier")
     poseidon_base_url: str = Field("https://integrate.api.nvidia.com/v1", description="Default fallback OpenAI-compatible base URL")
 
