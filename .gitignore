@@ -39,5 +39,9 @@ docs/
 
 # Runtime user memory, notes, and dynamic skills
 memory-store/notes.json
-memory-store/memory/
+!memory-store/notes.json.example
+memory-store/memory/*.md
+!memory-store/memory/*.example
 memory-store/skills/*.SKILL.md
+!memory-store/skills/schedule_meeting.SKILL.md
+

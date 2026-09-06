@@ -1,0 +1,19 @@
+{
+  "notes": [
+    {
+      "id": "note-1",
+      "text": "Welcome to Poseidon! Notes created with benign content are saved automatically via guarded_auto."
+    },
+    {
+      "id": "note-2",
+      "text": "Security tip: Notes containing passwords, URLs, or API keys trigger the step-up ApprovalCard."
+    }
+  ],
+  "reminders": [
+    {
+      "id": "rem-1",
+      "text": "Review weekly task priorities with Poseidon",
+      "due_at": "2026-09-10T10:00:00Z"
+    }
+  ]
+}
