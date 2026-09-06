@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import uuid4
 from ._storage import read_json, write_json
+from app.security.note_guard import NoteGuard, SuspiciousNoteError
 
 
 def notes_reminders_read(query: str = "") -> dict[str, Any]:
@@ -12,10 +13,32 @@ def notes_reminders_read(query: str = "") -> dict[str, Any]:
     return result
 
 
-def notes_reminders_create(kind: str, text: str, due_at: str | None = None) -> dict[str, Any]:
+def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _operator_approved: bool = False) -> dict[str, Any]:
     if kind not in {"note", "reminder"}:
         raise ValueError("kind must be note or reminder")
+
+    # ── Security gate (3-tier adaptive policy) ────────────────────────────
+    verdict = NoteGuard.inspect(text)
+
+    if verdict.verdict == "reject":
+        reason = "; ".join(verdict.reasons)
+        raise ValueError(f"Note creation blocked by security policy: {reason}")
+
+    if verdict.verdict == "suspicious" and not _operator_approved:
+        # Raise sentinel — orchestrator catches this and re-routes to the
+        # approval_gate node.  The original arguments are preserved so the
+        # tool can be re-executed after the operator approves.
+        raise SuspiciousNoteError(
+            kind=kind,
+            text=text,
+            due_at=due_at,
+            reasons=verdict.reasons,
+        )
+
+    # ── Tier 1: clean — persist immediately ───────────────────────────────
     data = read_json("notes.json", {"notes": [], "reminders": []})
+    NoteGuard.check_storage_capacity(data)
+
     item = {"id": str(uuid4()), "text": text}
     if due_at:
         item["due_at"] = due_at
@@ -36,3 +59,4 @@ def notes_reminders_delete(kind: str, item_id: str) -> dict[str, Any]:
         raise ValueError(f"{kind} not found")
     write_json("notes.json", data)
     return {"deleted": item_id, "kind": kind}
+
