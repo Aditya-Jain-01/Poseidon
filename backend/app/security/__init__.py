@@ -14,6 +14,7 @@ from app.security.taint import (
 from app.security.adversarial_filter import AdversarialReviewer
 from app.security.dlp import DLPScanner
 from app.security.risk_analyzer import RiskAnalyzer
+from app.security.note_guard import NoteGuard, SuspiciousNoteError
 
 __all__ = [
     "TaintTracker",
@@ -28,4 +29,6 @@ __all__ = [
     "AdversarialReviewer",
     "DLPScanner",
     "RiskAnalyzer",
+    "NoteGuard",
+    "SuspiciousNoteError",
 ]
