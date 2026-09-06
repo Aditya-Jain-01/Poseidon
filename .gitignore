@@ -36,3 +36,8 @@ CONTEXT.md
 pytest.ini
 skills-lock.json
 docs/
+
+# Runtime user memory, notes, and dynamic skills
+memory-store/notes.json
+memory-store/memory/
+memory-store/skills/*.SKILL.md
