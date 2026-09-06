@@ -25,6 +25,13 @@ class ApprovalStore:
         request["resolved_at"] = datetime.now(timezone.utc).isoformat()
         return request
 
+    def get_pending_for_user(self, user_id: str) -> dict[str, Any] | None:
+        """Find the latest pending approval request parked for this user."""
+        for request in reversed(list(self._pending.values())):
+            if request.get("context", {}).get("user_id") == user_id:
+                return request
+        return None
+
     @staticmethod
     def public(request: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in request.items() if key != "context"}

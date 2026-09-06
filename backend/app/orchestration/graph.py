@@ -13,6 +13,7 @@ from app.orchestration.approval_store import approval_store
 from app.orchestration.state import AgentState, InboundEvent
 from app.orchestration.trajectory import trajectory_store
 from app.security.dlp import DLPScanner
+from app.security.note_guard import SuspiciousNoteError
 from app.security.risk_analyzer import RiskAnalyzer
 from app.security.taint import is_channel_untrusted
 from app.tools.registry import execute_tool, get_tier, get_tools_for_agent
@@ -52,7 +53,12 @@ def next_step(state: AgentState) -> str:
         return "end"
     if state["tool_call_count"] >= settings.poseidon_max_tool_calls:
         return "limit"
-    return "approval" if get_tier(state["current_tool_call"]["name"]) == "approval_required" else "execute"
+    tier = get_tier(state["current_tool_call"]["name"])
+    if tier == "approval_required":
+        return "approval"
+    if tier == "guarded_auto":
+        return "guarded"
+    return "execute"
 
 
 async def approval_gate(state: AgentState) -> dict:
@@ -115,6 +121,68 @@ async def tool_executor(state: AgentState) -> dict:
     }
 
 
+async def guarded_tool_executor(state: AgentState) -> dict:
+    """Execute a guarded_auto tool (e.g. notes_reminders_create).
+
+    On SuspiciousNoteError the call is transparently re-routed to the
+    approval_gate — the operator sees an ApprovalCard just as they would
+    for a native approval_required tool.  On success it behaves exactly
+    like the regular tool_executor.
+    """
+    call = state["current_tool_call"]
+    call_args = dict(call.get("arguments", {}))
+    # Strip internal override to prevent prompt injection from bypassing security
+    call_args.pop("_operator_approved", None)
+    try:
+        result = await execute_tool(call["name"], call_args)
+    except SuspiciousNoteError as exc:
+        # Transparently escalate to the approval gate.  Annotate the parked
+        # request so the UI can surface a 'Suspicious note' label.
+        suspicious_call = dict(call)
+        suspicious_call.setdefault("arguments", {})
+        suspicious_state = {
+            **state,
+            "current_tool_call": {
+                **suspicious_call,
+                "_suspicious_note": True,
+                "_suspicious_reasons": exc.reasons,
+            },
+        }
+        trajectory_store.record(
+            state["run_id"],
+            "suspicious_note_escalated",
+            agent_id=state["active_agent"],
+            tool_name=call["name"],
+            tool_args=call.get("arguments", {}),
+            risk_level="medium",
+        )
+        return await approval_gate(suspicious_state)
+    except Exception as exc:
+        result = {"error": str(exc)}
+
+    trajectory_store.record(
+        state["run_id"],
+        "tool_executed",
+        agent_id=state["active_agent"],
+        tool_name=call["name"],
+        tool_args=call.get("arguments", {}),
+        tool_result=result,
+        risk_level=get_tier(call["name"]),
+    )
+    return {
+        "messages": [
+            ToolMessage(
+                content=json.dumps(result, default=str),
+                tool_call_id=call.get("id", call["name"]),
+                name=call["name"],
+            )
+        ],
+        "tool_results": [*state["tool_results"], {"tool_name": call["name"], "result": result}],
+        "tool_call_count": state["tool_call_count"] + 1,
+        "current_tool_call": None,
+    }
+
+
 async def limit_node(state: AgentState) -> dict:
     return {
         "messages": [AIMessage(content="I stopped because this request exceeded the configured tool-call limit.")],
@@ -126,6 +194,7 @@ async def limit_node(state: AgentState) -> dict:
 _builder = StateGraph(AgentState)
 _builder.add_node("agent", agent_node)
 _builder.add_node("tool_executor", tool_executor)
+_builder.add_node("guarded_tool_executor", guarded_tool_executor)
 _builder.add_node("approval_gate", approval_gate)
 _builder.add_node("limit", limit_node)
 
@@ -134,9 +203,11 @@ _builder.add_conditional_edges("agent", next_step, {
     "end": END,
     "approval": "approval_gate",
     "execute": "tool_executor",
+    "guarded": "guarded_tool_executor",
     "limit": "limit",
 })
 _builder.add_edge("tool_executor", "agent")
+_builder.add_edge("guarded_tool_executor", "agent")
 _builder.add_edge("approval_gate", END)
 _builder.add_edge("limit", END)
 graph = _builder.compile()
@@ -179,13 +250,15 @@ async def run_agent(event: InboundEvent, run_id: str, agent_id: str | None = Non
     raw = "Awaiting your approval to continue." if pending else str(result["messages"][-1].content)
     safe = DLPScanner.scan_and_redact(raw).sanitized_text
 
-    memory_engine.record_turn(
-        user_id=event.user_id,
-        user_text=event.text,
-        reply=safe,
-        run_id=run_id,
-        channel=event.channel,
-    )
+    # Only commit finished turns to memory; pending approval requests are recorded upon approval/denial
+    if not pending:
+        memory_engine.record_turn(
+            user_id=event.user_id,
+            user_text=event.text,
+            reply=safe,
+            run_id=run_id,
+            channel=event.channel,
+        )
 
     return {
         "reply": safe,
@@ -212,6 +285,17 @@ async def resume_approval(approval_id: str, decision: str) -> dict[str, Any]:
     )
 
     if decision == "denied":
+        user_text = next(
+            (str(m.content) for m in reversed(context.get("messages", [])) if getattr(m, "type", "") in {"human", "user"}),
+            "Cancel action",
+        )
+        memory_engine.record_turn(
+            user_id=context["user_id"],
+            user_text=user_text,
+            reply="Action denied. No changes were made.",
+            run_id=request["run_id"],
+            channel=context.get("channel", "web"),
+        )
         return {
             "reply": "Action denied. No changes were made.",
             "run_id": request["run_id"],
@@ -223,7 +307,9 @@ async def resume_approval(approval_id: str, decision: str) -> dict[str, Any]:
 
     # Execute tool under SandboxGuard
     tool_name = request["tool_name"]
-    arguments = request.get("arguments", {})
+    arguments = dict(request.get("arguments", {}))
+    if tool_name == "notes_reminders_create":
+        arguments["_operator_approved"] = True
     try:
         result = await execute_tool(tool_name, arguments)
     except Exception as exc:
