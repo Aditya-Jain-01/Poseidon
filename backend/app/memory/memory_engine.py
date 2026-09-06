@@ -226,7 +226,12 @@ class MemoryEngine:
                 # Run consolidation in background task so user request does not block
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(summarize_and_consolidate(user_id=user_id, events=unconsolidated))
+                    async def _safe_consolidate():
+                        try:
+                            await summarize_and_consolidate(user_id=user_id, events=unconsolidated)
+                        except Exception as err:
+                            print(f"[MemoryEngine] Background consolidation task error: {err}")
+                    loop.create_task(_safe_consolidate())
                 except RuntimeError:
                     pass
         except Exception as exc:

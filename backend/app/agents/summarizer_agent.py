@@ -205,7 +205,10 @@ async def summarize_and_consolidate(
     # 4. Mark episodic events as consolidated
     event_ids = [e["id"] for e in events if "id" in e]
     if event_ids:
-        episodic_store.mark_consolidated(event_ids=event_ids)
+        try:
+            episodic_store.mark_consolidated(event_ids=event_ids)
+        except Exception as exc:
+            print(f"[SummarizerAgent] Failed to mark events as consolidated: {exc}")
 
     return {
         "status": "success",

@@ -84,6 +84,12 @@ class EpisodicStore:
                 );
             """)
 
+            # Ensure 'consolidated' column exists in case state.db pre-dates migration
+            try:
+                cursor.execute("ALTER TABLE episodic_events ADD COLUMN consolidated INTEGER NOT NULL DEFAULT 0")
+            except Exception:
+                pass
+
             # 2. Indices for recency & consolidation queries
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_episodic_user_created 
@@ -388,16 +394,19 @@ class EpisodicStore:
         """Mark episodic events as consolidated."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            if event_ids:
-                placeholders = ",".join("?" for _ in event_ids)
+            if event_ids is not None:
+                valid_ids = [int(i) for i in event_ids if i is not None]
+                if not valid_ids:
+                    return 0
+                placeholders = ",".join("?" for _ in valid_ids)
                 cursor.execute(
                     f"UPDATE episodic_events SET consolidated = 1 WHERE id IN ({placeholders})",
-                    list(event_ids),
+                    valid_ids,
                 )
             elif up_to_id is not None:
                 cursor.execute(
                     "UPDATE episodic_events SET consolidated = 1 WHERE id <= ?",
-                    (up_to_id,),
+                    (int(up_to_id),),
                 )
             else:
                 cursor.execute("UPDATE episodic_events SET consolidated = 1 WHERE consolidated = 0")
