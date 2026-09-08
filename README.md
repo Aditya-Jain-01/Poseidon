@@ -8,11 +8,11 @@
   <img src="https://img.shields.io/badge/Protocol-MCP%20Client-8A2BE2?style=flat-square" alt="Model Context Protocol" />
   <img src="https://img.shields.io/badge/Gateway-Telegram%20Dual--Mode-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram Gateway" />
   <img src="https://img.shields.io/badge/Frontend-React%2019%20+%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19 + Vite" />
-  <img src="https://img.shields.io/badge/Design-Nothing%20OS%20Inspired-000000?style=flat-square" alt="Nothing Design System" />
+  <img src="https://img.shields.io/badge/Design-Nothing%20Design%20System-000000?style=flat-square" alt="Nothing Design System" />
   <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT" />
 </p>
 
-Poseidon is a local-first, channel-agnostic execution harness for a persistent personal AI agent. It pairs a **four-tier cognitive memory architecture** (Working, Episodic, Semantic, and Procedural) with **bounded LangGraph execution**, **multi-provider LLM inference (Local Ollama, NVIDIA NIM, OpenAI, OpenRouter)**, **adaptive security guardrails (NoteGuard, DLP, sandboxed capabilities)**, and a **developer cockpit** designed under the Nothing OS industrial aesthetic.
+Poseidon is a local-first, channel-agnostic execution harness for a persistent personal AI agent. It pairs a **four-tier cognitive memory architecture** (Working, Episodic, Semantic, and Procedural) with **bounded LangGraph execution**, **multi-provider LLM inference (Local Ollama, NVIDIA NIM, OpenAI, OpenRouter)**, **adaptive security guardrails (NoteGuard, DLP, sandboxed capabilities)**, and a **developer cockpit** designed under the Nothing Design System industrial aesthetic.
 
 ---
 
