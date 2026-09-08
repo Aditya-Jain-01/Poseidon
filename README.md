@@ -8,11 +8,11 @@
   <img src="https://img.shields.io/badge/Protocol-MCP%20Client-8A2BE2?style=flat-square" alt="Model Context Protocol" />
   <img src="https://img.shields.io/badge/Gateway-Telegram%20Dual--Mode-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram Gateway" />
   <img src="https://img.shields.io/badge/Frontend-React%2019%20+%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19 + Vite" />
-  <img src="https://img.shields.io/badge/Design-Nothing%20Design%20System-000000?style=flat-square" alt="Nothing Design System" />
+ 
   <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT" />
 </p>
 
-Poseidon is a local-first, channel-agnostic execution harness for a persistent personal AI agent. It pairs a **four-tier cognitive memory architecture** (Working, Episodic, Semantic, and Procedural) with **bounded LangGraph execution**, **multi-provider LLM inference (Local Ollama, NVIDIA NIM, OpenAI, OpenRouter)**, **adaptive security guardrails (NoteGuard, DLP, sandboxed capabilities)**, and a **developer cockpit** designed under the Nothing Design System industrial aesthetic.
+Poseidon is a local-first, channel-agnostic execution harness for a persistent personal AI agent. It pairs a **four-tier cognitive memory architecture** (Working, Episodic, Semantic, and Procedural) with **bounded LangGraph execution**, **multi-provider LLM inference (Local Ollama, NVIDIA NIM, OpenAI, OpenRouter)**, **adaptive security guardrails (NoteGuard, DLP, sandboxed capabilities)**, and a **developer cockpit**.
 
 ---
 
@@ -42,7 +42,7 @@ Poseidon addresses these challenges by isolating agent execution inside a govern
 - **Governed Tool Execution:** Implements strict three-tier tool safety (`auto`, `guarded_auto`, `approval_required`), filesystem containment to `memory-store/`, execution timeouts, and outbound Data Loss Prevention (DLP) filtering.
 - **Model Flexibility:** Connects to 100% private local models (Ollama) or high-performance cloud providers (NVIDIA NIM, OpenAI, OpenRouter) with runtime endpoint health verification.
 - **Omni-Channel Operations:** Normalizes interactions across local Web interfaces, developer CLI tools, and a dual-mode Telegram bot adapter with user allowlisting and interactive human approval controls.
-- **Industrial Observability:** Offers an interactive developer cockpit built on the Nothing Design System, providing real-time trajectory visualization, architecture topology CAD tracking, and memory hydration telemetry.
+- **Industrial Observability:** Offers an interactive developer cockpit built on an industrial design system, providing real-time trajectory visualization, architecture topology CAD tracking, and memory hydration telemetry.
 
 ---
 
@@ -58,7 +58,7 @@ Poseidon addresses these challenges by isolating agent execution inside a govern
 - **`SandboxGuard` (`app.security.sandbox`):** In-process capability jail enforcing filesystem confinement to `memory-store/`, argument traversal sanitization, 5.0-second execution timeouts, and strict shell/terminal execution prohibition.
 - **`DLPScanner` (`app.security.dlp`):** Pre-compiled regular expression firewall redacting credentials (OpenAI, Anthropic, AWS, Google, GitHub), bearer tokens, private keys, credit cards, and SSNs before responses egress the system.
 - **`TelegramLongPoller` (`app.gateway.telegram_adapter`):** Local background runner that pulls updates directly from the Telegram Bot API over outbound HTTPS. Operates behind firewalls/NATs without public IP addresses, domain names, or reverse proxies.
-- **Nothing Design System (`nothing-design` + `ui-ux-pro-max`):** Frontend interface architecture utilizing a pure black OLED background (`#000000`), 24px dot-matrix ambient grid, graphite pill containers (`#111111`, `#1A1A1A`), crisp 1px borders without drop shadows, and functional accent red (`#D71921`).
+- **Industrial Design System (`industrial-design` + `ui-ux-pro-max`):** Frontend interface architecture utilizing a pure black OLED background (`#000000`), 24px dot-matrix ambient grid, graphite pill containers (`#111111`, `#1A1A1A`), crisp 1px borders without drop shadows, and functional accent red (`#D71921`).
 
 ---
 
@@ -131,7 +131,7 @@ Poseidon/
 │   │   │   ├── Gateway/               # Cross-channel API message ledger
 │   │   │   ├── Settings/              # Models, Memory Studio, and Guardrails studio
 │   │   │   └── Overview/              # System architecture & diagnostic summary
-│   │   └── styles/                    # Nothing Design System CSS tokens & base styles
+│   │   └── styles/                    # Industrial Design System CSS tokens & base styles
 │   ├── package.json
 │   └── vite.config.js                 # Vite dev proxy configuration
 │
