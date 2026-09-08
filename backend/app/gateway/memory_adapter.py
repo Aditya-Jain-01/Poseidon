@@ -1,6 +1,5 @@
 """Memory API router — exposes HTTP endpoints for reading and managing persistent memory.
 
-Sprint 2 (Person C — Stage 6):
 - GET /memory/semantic — read semantic facts with optional category/query filter.
 - GET /memory/episodic — read episodic event timeline and history.
 - GET /memory/procedural — list procedural skill playbooks (*.SKILL.md).

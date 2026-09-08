@@ -1,6 +1,5 @@
 """Consolidation Manager — triggers memory distillation after N new chats.
 
-Sprint 2 (Person C — Stage 5):
 - Enforces the "only after N new chats" threshold rule (spec source of truth).
 - Prevents expensive LLM summarization on every single turn.
 - Pulls unconsolidated episodic entries and hands them to the Summarizer Agent.

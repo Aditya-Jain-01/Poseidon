@@ -1,6 +1,5 @@
 """Episodic Memory Store — SQLite structured log + sqlite-vec vector RAG.
 
-Sprint 2 (Vector RAG Upgrade):
 - Persistent episodic store on disk (`memory-store/state.db`).
 - SQLite table for chronological dated events and chat history.
 - sqlite-vec virtual table for vector similarity (KNN) retrieval.

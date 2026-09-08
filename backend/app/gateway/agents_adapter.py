@@ -1,4 +1,4 @@
-"""Agent Management & LLM Settings REST API — Sprint 4 (Person C).
+"""Agent Management & LLM Settings REST API.
 
 Provides endpoints for:
 - Agent CRUD (list, get, create, update, delete, reload)

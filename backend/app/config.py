@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     poseidon_host: str = Field("127.0.0.1")
     poseidon_port: int = Field(8000)
 
-    # Guardrails (enforced in Sprint 3, configured now)
+    # Guardrails
     poseidon_max_iterations: int = Field(5)
     poseidon_max_tool_calls: int = Field(5)
     poseidon_max_approval_requests_per_hour: int = Field(5)

@@ -1,11 +1,10 @@
 """Semantic Memory Store — durable facts and user profile.
 
-Sprint 2 (Person B — Stage 2):
 - Persistent semantic store backed by MEMORY.md + SQLite FTS5 index.
 - Stores durable facts, user preferences, and profile data.
 - Keyword top-k retrieval (no embedding model — deliberately cheap/deterministic).
 - Human-readable MEMORY.md mirror auto-regenerated on writes.
-- The Summarizer Agent (Stage 5) distills episodic entries into semantic facts.
+- The Summarizer Agent distills episodic entries into semantic facts.
 """
 
 import json

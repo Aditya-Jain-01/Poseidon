@@ -1,9 +1,8 @@
 """Soul Store — Drop-in *.soul.md agent persona and configuration subsystem.
 
-Sprint 4 (Person A):
-- Scans `memory-store/agents/*.soul.md` for prebuilt and custom agent definitions.
+- Scans `memory-store/agents/*.soul.md` for agent definitions.
 - Parses YAML frontmatter (tools, model presets, routing signals) and markdown personality.
-- Manages agent lifecycle: load, create (max 2 custom), update, delete, system prompt generation.
+- Manages agent lifecycle: load, create, update, delete, system prompt generation.
 """
 
 from __future__ import annotations

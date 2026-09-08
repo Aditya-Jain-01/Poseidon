@@ -1,4 +1,4 @@
-"""Trajectory REST API adapter — Sprint 4 (Person C).
+"""Trajectory REST API adapter.
 
 Exposes execution telemetry recorded by TrajectoryStore per run_id.
 """

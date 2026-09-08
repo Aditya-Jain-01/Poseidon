@@ -1,4 +1,4 @@
-"""Unit tests for LLMProvider and QA Agent runner (Sprint 4 — Person A)."""
+"""Unit tests for LLMProvider and QA Agent runner."""
 
 import gc
 import json

@@ -1,4 +1,4 @@
-"""Integration tests for Agents & Trajectory API endpoints (Sprint 4 — Person C)."""
+"""Integration tests for Agents & Trajectory API endpoints."""
 
 import tempfile
 import unittest

@@ -1,8 +1,7 @@
-"""Generic Agent Runner — Executes any agent by ID (Poseidon, or custom).
+"""Generic Agent Runner — Executes agent inference turns.
 
-Sprint 4 (Person A):
 - Dynamically binds agent persona from `soul_store`.
-- Dispatches LLM calls using per-agent provider clients from `llm_provider`.
+- Dispatches LLM calls using provider clients from `llm_provider`.
 - Full OpenAI tool/function-calling capability with response parsing.
 - Backwards-compatible interface for LangGraph nodes.
 """

@@ -1,6 +1,5 @@
 """Summarizer Agent — distills episodic conversation logs into persistent semantic & procedural memories.
 
-Sprint 2 (Person C — Stage 5):
 - Evaluates unconsolidated episodic memory events.
 - Extracts durable semantic facts (user profile, preferences, relationships, constraints).
 - Identifies repeatable procedural skills / playbooks.

@@ -1,4 +1,4 @@
-"""Unit tests for SoulStore and drop-in *.soul.md agent system (Sprint 4 — Person A)."""
+"""Unit tests for SoulStore and agent system."""
 
 import gc
 import tempfile

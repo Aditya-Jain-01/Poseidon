@@ -1,6 +1,5 @@
 """Procedural Memory Store — "how to act" playbooks and skill instructions.
 
-Sprint 2 (Person B — Stage 3):
 - Loads *.SKILL.md files from the `memory-store/skills/` directory.
 - Direct load by name/task match (not searched via embedding or FTS).
 - Each SKILL.md file has YAML frontmatter (name, triggers, description)
