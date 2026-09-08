@@ -70,7 +70,7 @@ Only after the operator has used the system and explicitly asks for a specific r
 In addition to the per-run `max_iterations` / `max_tool_calls`:
 
 - **Max approval requests per hour** — default: 5. If the agent generates an unreasonable number, stop and surface a single alert instead of flooding the operator.
-- **Pause/kill command** — one command, reachable from any connected channel, that immediately stops all tool execution across every channel and cronjob until the operator explicitly resumes. Built in Sprint 3.
+- **Pause/kill command** — one command, reachable from any connected channel, that immediately stops all tool execution across every channel and cronjob until the operator explicitly resumes.
 
 ## 8. Audit Trail
 
