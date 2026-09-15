@@ -19,9 +19,6 @@ from app.security.taint import evaluate_content_risk
 
 logger = logging.getLogger(__name__)
 
-# ── Tier 3 (Hard Reject) ────────────────────────────────────────────────────
-
-# Raw LLM turn-delimiter smuggling — attempts to inject new assistant turns
 _PROMPT_DELIMITER_PATTERNS = [
     re.compile(r"<\|im_start\|>"),
     re.compile(r"<\|im_end\|>"),
@@ -32,9 +29,6 @@ _PROMPT_DELIMITER_PATTERNS = [
     re.compile(r"<\|assistant\|>"),
 ]
 
-# ── Tier 2 (Suspicious — step-up approval) ──────────────────────────────────
-
-# External URLs and raw IP addresses (could be exfiltration endpoints)
 _URL_PATTERN = re.compile(
     r"https?://[^\s<>\"']+"
     r"|ftp://[^\s<>\"']+"
@@ -42,8 +36,6 @@ _URL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Sensitive file/config targets and secret-sounding keywords that don't
-# belong in an everyday note (grocery list, meeting reminder, to-do).
 _SENSITIVE_KEYWORD_PATTERNS = [
     re.compile(r"\b(api[_\s-]?key|secret[_\s-]?key|private[_\s-]?key)\b", re.IGNORECASE),
     re.compile(r"\bpassword\b", re.IGNORECASE),
@@ -53,12 +45,9 @@ _SENSITIVE_KEYWORD_PATTERNS = [
     re.compile(r"\bssh[_\s-]?key\b", re.IGNORECASE),
 ]
 
-# Maximum sizes (also configurable via settings, but enforced here as code constants)
 _MAX_NOTE_CHARS = 500
-_MAX_TOTAL_ITEMS = 500  # across all notes + reminders combined
+_MAX_TOTAL_ITEMS = 500
 
-
-# ── Public types ─────────────────────────────────────────────────────────────
 
 Verdict = Literal["allow", "suspicious", "reject"]
 
@@ -84,8 +73,6 @@ class SuspiciousNoteError(Exception):
         self.reasons = reasons
 
 
-# ── Core validator ───────────────────────────────────────────────────────────
-
 class NoteGuard:
     """Stateless pre-write validator.  Call NoteGuard.inspect(text) before
     writing any note/reminder to persistent storage.
@@ -101,8 +88,6 @@ class NoteGuard:
         - "reject"     → raise ValueError to hard-block the request.
         """
         text_clean = (text or "").strip()
-
-        # ── Tier 3 checks ────────────────────────────────────────────────────
 
         if not text_clean:
             return NoteVerdict("reject", ["Note text is empty."], "low")
@@ -137,8 +122,6 @@ class NoteGuard:
                     "critical",
                 )
 
-        # ── Tier 2 checks ────────────────────────────────────────────────────
-
         suspicious_reasons: list[str] = []
 
         # Check taint content-risk engine (credential requests, auth manipulation,
@@ -167,7 +150,6 @@ class NoteGuard:
             logger.warning("[NoteGuard] Suspicious note flagged: %s", suspicious_reasons)
             return NoteVerdict("suspicious", suspicious_reasons, "medium")
 
-        # ── Tier 1 — clean ───────────────────────────────────────────────────
         return NoteVerdict("allow", [], "low")
 
     @classmethod

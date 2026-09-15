@@ -24,7 +24,9 @@ class LocalEmbeddingService:
         self._model: "SentenceTransformer | None" = None
 
     def _load_model(self) -> "SentenceTransformer | None":
-        """Lazy-load the model on first call if available."""
+        """Lazy-load the model on first call. Falls back to a deterministic
+        pseudo-embedding when sentence-transformers isn't installed.
+        """
         if self._model is None:
             try:
                 from sentence_transformers import SentenceTransformer
@@ -33,11 +35,13 @@ class LocalEmbeddingService:
                 logger.info("Embedding model loaded (dim=%d).", self._model.get_sentence_embedding_dimension())
             except ImportError:
                 logger.warning("sentence_transformers not installed; falling back to deterministic embedding.")
-                self._model = False  # Sentinel indicating unavailable
+                self._model = False
         return self._model if self._model is not False else None
 
     def _fallback_embed(self, text: str) -> list[float]:
-        """Generate a fast deterministic 384-dim pseudo-vector when model is unavailable."""
+        """Seed-based pseudo-embedding so vector columns are always populated,
+        even without a real model. Same text always produces the same vector.
+        """
         import random
         rng = random.Random(text)
         vec = [rng.gauss(0, 1) for _ in range(self.dim)]
@@ -66,5 +70,4 @@ class LocalEmbeddingService:
         return settings.poseidon_embedding_dim
 
 
-# App-wide singleton — lazy; model loads on first .embed_text() call
 embedding_service = LocalEmbeddingService()

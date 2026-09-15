@@ -38,7 +38,6 @@ class RiskAnalyzer:
         warnings: list[str] = []
         dangerous_params: list[dict[str, Any]] = []
 
-        # 1. Parameter content scan
         for param_key, param_val in args.items():
             val_str = str(param_val)
             for pattern, warning_label in COMPILED_PARAM_PATTERNS:
@@ -51,7 +50,6 @@ class RiskAnalyzer:
                         "warning": warning_label,
                     })
 
-        # 2. Parameter diff computation
         diff: dict[str, Any] = {}
         all_keys = set(args.keys()).union(set(orig.keys()))
         for k in all_keys:
@@ -60,7 +58,6 @@ class RiskAnalyzer:
             if old_v != new_v:
                 diff[k] = {"old": old_v, "new": new_v}
 
-        # 3. Determine Risk Level
         is_write = any(w in tool for w in ["write", "create", "update", "delete", "cron", "delegate", "manage_write"])
 
         if is_tainted and is_write:

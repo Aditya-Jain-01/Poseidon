@@ -50,15 +50,14 @@ class SessionStore:
 
 session_store = SessionStore()
 
-_BASE_SYSTEM_PROMPT = "You are Poseidon, a personal AI agent with persistent memory."
-
-
-def _load_base_system_prompt() -> str:
-    return _BASE_SYSTEM_PROMPT
-
 
 class MemoryEngine:
-    """Deep facade unifying the 4-tier cognitive memory architecture."""
+    """Facade unifying the 4-tier cognitive memory architecture.
+
+    hydrate_context() assembles the Working Memory message list for each
+    agent turn by combining: soul persona + procedural skills + semantic
+    facts + episodic recall + session history + current user message.
+    """
 
     def __init__(self) -> None:
         self.session_store = session_store
@@ -146,16 +145,13 @@ class MemoryEngine:
         Retrieves episodic, semantic, and procedural memories, binds the agent persona,
         and appends session chat history and the current user message.
         """
-        # 1. Resolve agent persona
-        persona = soul_store.build_system_prompt(agent_id) if agent_id else _load_base_system_prompt()
+        persona = soul_store.build_system_prompt(agent_id) if agent_id else "You are Poseidon, a personal AI agent with persistent memory."
 
-        # 2. Retrieve persistent memories across tiers
         episodic_events = self.episodic_store.retrieve(user_id=user_id, query=user_text) or []
         episodic_block = self._format_episodic(episodic_events)
         semantic_block = self._format_semantic(user_id=user_id, user_text=user_text)
         procedural_block = self._format_procedural(user_text=user_text)
 
-        # Store clean structured context for UI observability
         self._last_context = {
             "semantic_facts": self._get_raw_semantic(user_id, user_text),
             "episodic_events": [
@@ -169,9 +165,10 @@ class MemoryEngine:
             "procedural_skills": self._get_raw_procedural(user_text),
         }
 
-        # 3. Combine memory blocks
         memory_blocks = [b for b in [procedural_block, semantic_block, episodic_block] if b]
 
+        # Inject persistent memory behind a delimiter so _inject_agent_soul
+        # (in qa_agent.py) can detect and preserve it across re-hydrations
         if memory_blocks:
             memory_section = "\n\n".join(memory_blocks)
             full_system_prompt = (
@@ -183,7 +180,6 @@ class MemoryEngine:
         else:
             full_system_prompt = persona
 
-        # 4. Assemble message list with session history
         history = self.session_store.get_history(user_id)
         return [
             SystemMessage(content=full_system_prompt),
@@ -200,10 +196,8 @@ class MemoryEngine:
         channel: str = "web",
     ) -> None:
         """Persist exchange to Working Memory session and Episodic store."""
-        # 1. Update in-memory session history
         self.session_store.append(user_id, user_text, reply)
 
-        # 2. Write to episodic database
         self.episodic_store.log_exchange(
             user_id=user_id,
             human_msg=user_text,
@@ -212,18 +206,19 @@ class MemoryEngine:
             run_id=run_id,
         )
 
-        # 3. Check consolidation threshold
         self._maybe_trigger_consolidation(user_id)
 
     def _maybe_trigger_consolidation(self, user_id: str) -> None:
-        """Trigger background consolidation if unconsolidated exchange count exceeds threshold."""
+        """Fire-and-forget background task: once unconsolidated turn count
+        hits the threshold, the SummarizerAgent distills episodic events
+        into durable semantic facts and procedural skills.
+        """
         try:
             from app.memory.consolidation import get_unconsolidated_events
             unconsolidated = get_unconsolidated_events(user_id=user_id, limit=50)
             threshold = getattr(settings, "poseidon_consolidation_threshold", 30)
             if len(unconsolidated) >= threshold:
                 from app.agents.summarizer_agent import summarize_and_consolidate
-                # Run consolidation in background task so user request does not block
                 try:
                     loop = asyncio.get_running_loop()
                     async def _safe_consolidate():

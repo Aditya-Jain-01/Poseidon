@@ -25,6 +25,7 @@ def read_json(filename: str, default: Any) -> Any:
 
 
 def write_json(filename: str, value: Any) -> None:
+    """Write JSON atomically via temp file + rename to prevent corruption."""
     path = store_path(filename)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_suffix(path.suffix + ".tmp")

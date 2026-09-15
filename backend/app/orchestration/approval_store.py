@@ -5,6 +5,11 @@ from typing import Any
 from uuid import uuid4
 
 class ApprovalStore:
+    """In-memory parking lot for tool calls that need operator confirmation.
+    When the graph hits approval_gate, the full execution context is parked
+    here. resume_approval() pops it and re-enters the graph.
+    """
+
     def __init__(self) -> None:
         self._pending: dict[str, dict[str, Any]] = {}
 

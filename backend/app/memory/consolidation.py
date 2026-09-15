@@ -72,7 +72,6 @@ async def check_and_trigger_consolidation(
             "message": f"{unconsolidated_count}/{threshold} chats until next automatic consolidation",
         }
 
-    # Fetch unconsolidated records
     events = get_unconsolidated_events(user_id=user_id, limit=limit)
     if not events:
         return {
@@ -83,7 +82,6 @@ async def check_and_trigger_consolidation(
             "message": "No unconsolidated events present",
         }
 
-    # Distill and persist
     result = await summarizer_agent.summarize_and_consolidate(user_id=user_id, events=events)
     remaining_unconsolidated = episodic_store.count_unconsolidated(user_id=user_id)
 

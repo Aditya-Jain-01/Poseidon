@@ -71,7 +71,6 @@ class MCPManager:
     def discover_tools(self) -> dict[str, dict[str, Any]]:
         """Return all discovered MCP tools."""
         self.load_config()
-        # Returns loaded dynamic tools
         return dict(self._mcp_tools)
 
     async def execute_mcp_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:

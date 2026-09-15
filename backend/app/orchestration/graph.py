@@ -19,6 +19,7 @@ from app.security.taint import is_channel_untrusted
 from app.tools.registry import execute_tool, get_tier, get_tools_for_agent
 
 
+# Fallback when no routing signal matches; all unrouted messages go to Poseidon
 DEFAULT_PRIMARY_AGENT = "poseidon"
 
 
@@ -49,6 +50,12 @@ async def agent_node(state: AgentState) -> dict:
 
 
 def next_step(state: AgentState) -> str:
+    """Conditional edge: decides whether to execute, gate, or terminate.
+
+    Tool tiers (auto / guarded_auto / approval_required) control the
+    branching — this is the single enforcement point for the security
+    policy defined in registry.py and GUARDRAILS.md.
+    """
     if not state.get("current_tool_call"):
         return "end"
     if state["tool_call_count"] >= settings.poseidon_max_tool_calls:
@@ -190,7 +197,10 @@ async def limit_node(state: AgentState) -> dict:
     }
 
 
-# LangGraph state machine — single primary agent execution loop
+# Graph topology: agent → (execute | guarded | approval | limit | end)
+# Execution and guarded nodes loop back to agent for the next LLM turn;
+# approval and limit are terminal — the graph yields and the response
+# is returned with a pending approval request (or a hard stop message).
 _builder = StateGraph(AgentState)
 _builder.add_node("agent", agent_node)
 _builder.add_node("tool_executor", tool_executor)
@@ -248,9 +258,9 @@ async def run_agent(event: InboundEvent, run_id: str, agent_id: str | None = Non
     result = await graph.ainvoke(_initial_state(event, run_id, agent_id))
     pending = result.get("pending_approvals", [])
     raw = "Awaiting your approval to continue." if pending else str(result["messages"][-1].content)
+    # DLP scan redacts secrets/PII before the reply leaves the harness
     safe = DLPScanner.scan_and_redact(raw).sanitized_text
 
-    # Only commit finished turns to memory; pending approval requests are recorded upon approval/denial
     if not pending:
         memory_engine.record_turn(
             user_id=event.user_id,
@@ -305,9 +315,9 @@ async def resume_approval(approval_id: str, decision: str) -> dict[str, Any]:
             "trajectory": trajectory_store.get(request["run_id"]),
         }
 
-    # Execute tool under SandboxGuard
     tool_name = request["tool_name"]
     arguments = dict(request.get("arguments", {}))
+    # Bypass NoteGuard's Tier 2 check — the operator just approved this action
     if tool_name == "notes_reminders_create":
         arguments["_operator_approved"] = True
     try:
@@ -325,7 +335,6 @@ async def resume_approval(approval_id: str, decision: str) -> dict[str, Any]:
         risk_level="approval_required",
     )
 
-    # Re-enter LangGraph: construct resumed state with ToolMessage
     tool_msg = ToolMessage(
         content=json.dumps(result, default=str),
         tool_call_id=request.get("tool_call", {}).get("id", tool_name),
@@ -349,6 +358,7 @@ async def resume_approval(approval_id: str, decision: str) -> dict[str, Any]:
         "current_tool_call": None,
     }
 
+    # Re-enter the graph with the tool result appended to the parked messages
     graph_res = await graph.ainvoke(resumed_state)
     pending = graph_res.get("pending_approvals", [])
     raw = "Awaiting your approval to continue." if pending else str(graph_res["messages"][-1].content)

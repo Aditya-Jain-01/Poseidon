@@ -58,11 +58,9 @@ class SandboxGuard:
 
         resolved = Path(path).resolve()
 
-        # Check against allowed roots
         is_allowed = False
         for root in _ALLOWED_ROOTS:
             try:
-                # relative_to raises ValueError if resolved is not inside root
                 resolved.relative_to(root)
                 is_allowed = True
                 break
@@ -93,11 +91,9 @@ class SandboxGuard:
         """
         tool = (tool_name or "").strip().lower()
 
-        # Strict prohibition against shell/terminal capabilities per wren-agent-spec.md §7
         if "terminal" in tool or "shell" in tool or "bash" in tool or "exec" in tool:
             raise SandboxSecurityError(f"Tool '{tool_name}' is forbidden: terminal execution is disabled in v1.")
 
-        # Check for path arguments and validate them if present
         for key, val in arguments.items():
             if isinstance(val, str) and ("path" in key.lower() or "file" in key.lower() or "dir" in key.lower()):
                 # If looks like a path or contains separators, validate
@@ -117,7 +113,6 @@ class SandboxGuard:
         except asyncio.TimeoutError as exc:
             raise SandboxTimeoutError(f"Tool '{tool_name}' timed out after {timeout_seconds}s") from exc
         except Exception as exc:
-            # Re-raise sandbox security errors directly
             if isinstance(exc, SandboxSecurityError):
                 raise
             raise

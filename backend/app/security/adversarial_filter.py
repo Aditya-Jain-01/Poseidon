@@ -12,7 +12,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Heuristic adversarial pattern regexes
 ADVERSARIAL_PATTERNS = [
     r"(?i)\bignore\s+(all\s+)?(previous|prior|above)\s+instructions\b",
     r"(?i)\bdisregard\s+(all\s+)?(previous|prior|rules|guidelines)\b",

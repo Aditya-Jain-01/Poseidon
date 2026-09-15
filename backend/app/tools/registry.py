@@ -28,6 +28,10 @@ def _schema(name: str, description: str, properties: dict[str, Any], required: l
     }
 
 
+# Tier meanings:
+#   auto             — runs without user interaction
+#   guarded_auto     — auto but NoteGuard may escalate to approval
+#   approval_required — always pauses for operator confirmation
 BASE_TOOL_REGISTRY: dict[str, dict[str, Any]] = {
     "crm_read": {"tier": "auto", "handler": crm.crm_read, "schema": _schema("crm_read", "Search local CRM contacts.", {"query": {"type": "string"}})},
     "crm_write": {"tier": "approval_required", "handler": crm.crm_write, "schema": _schema("crm_write", "Create, update, or delete a local CRM contact.", {"action": {"type": "string", "enum": ["create", "update", "delete"]}, "contact": {"type": "object"}, "contact_id": {"type": "string"}}, ["action"])},
@@ -50,6 +54,7 @@ def get_all_tools() -> dict[str, dict[str, Any]]:
 
 
 def get_tier(tool_name: str) -> str:
+    """Look up a tool's security tier; unknown tools default to approval_required."""
     tool = get_all_tools().get(tool_name)
     return tool.get("tier", "approval_required") if tool else "approval_required"
 
@@ -65,7 +70,6 @@ def get_tools_for_agent(agent_id: str = "poseidon") -> list[dict[str, Any]]:
     if agent and agent.get("tools"):
         names = agent.get("tools", [])
         return [all_tools[name]["schema"] for name in names if name in all_tools]
-    # Default: all registered tools
     return [t["schema"] for t in all_tools.values()]
 
 
@@ -78,5 +82,4 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any] | None = None) 
     args = arguments or {}
     handler = tool["handler"]
 
-    # Sandboxed execution with timeout and path jailing
     return await SandboxGuard.execute(tool_name, handler, args)

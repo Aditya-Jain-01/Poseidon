@@ -47,7 +47,6 @@ def _to_openai_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
             result.append({"role": "user", "content": str(msg.content)})
         elif msg_type in ("ai", "assistant"):
             entry: dict[str, Any] = {"role": "assistant", "content": str(msg.content or "")}
-            # Preserve tool calls if message had them, strictly in OpenAI SDK format
             raw_tool_calls = getattr(msg, "tool_calls", None) or getattr(msg, "additional_kwargs", {}).get("tool_calls")
             if raw_tool_calls:
                 formatted_calls = []
@@ -106,7 +105,6 @@ def _inject_agent_soul(agent_id: str, messages: list[BaseMessage]) -> list[BaseM
     first = messages[0]
     if getattr(first, "type", "") == "system":
         content = str(first.content)
-        # If already hydrated with persona/memory, preserve directly
         if soul_prompt in content:
             return messages
 
@@ -138,7 +136,6 @@ async def call(
     Returns:
         AgentResult with 'content' (str | None) and 'tool_calls' (list | None).
     """
-    # Backward compatibility: call(messages)
     if isinstance(agent_id, list):
         messages = agent_id
         agent_id = "poseidon"
@@ -146,7 +143,6 @@ async def call(
     aid = (agent_id or "poseidon").lower()
     raw_messages = messages or []
 
-    # Inject agent soul persona
     context_messages = _inject_agent_soul(aid, raw_messages)
     openai_msgs = _to_openai_messages(context_messages)
 

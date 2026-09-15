@@ -78,7 +78,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         key = key.strip().lower()
         value = value.strip()
 
-        # Parse list values like [item1, item2, item3]
         if value.startswith("[") and value.endswith("]"):
             items = [item.strip().strip("\"'") for item in value[1:-1].split(",")]
             fm[key] = [item for item in items if item]
@@ -121,7 +120,6 @@ class ProceduralStore:
                 if skill:
                     self._skills.append(skill)
             except Exception as e:
-                # Log but don't crash — a broken skill file shouldn't kill the agent
                 print(f"[ProceduralStore] Warning: failed to load {skill_file.name}: {e}")
 
     def _load_skill_file(self, file_path: Path) -> Skill | None:
@@ -194,7 +192,6 @@ class ProceduralStore:
         self.skills_dir.mkdir(parents=True, exist_ok=True)
         file_path.write_text(skill_text, encoding="utf-8")
 
-        # Reload to pick up the new skill
         self.reload()
         return file_path
 
@@ -203,5 +200,4 @@ class ProceduralStore:
         return len(self._skills)
 
 
-# App-wide singleton instance
 procedural_store = ProceduralStore()

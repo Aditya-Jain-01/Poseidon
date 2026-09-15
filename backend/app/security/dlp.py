@@ -13,7 +13,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Pre-compiled DLP regex patterns
 DLP_RULES = [
     (
         "OpenAI / OpenRouter API Key",

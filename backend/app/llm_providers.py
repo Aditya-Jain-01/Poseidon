@@ -40,7 +40,6 @@ DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
 
 DEFAULT_AGENT_OVERRIDES: dict[str, dict[str, Any]] = {
     "poseidon": {"preset": "env"},
-    "octavious": {"preset": "local"},
     "nereus": {"preset": "cloud_free"},
     "kraken": {"preset": "cloud_free"},
 }
@@ -121,7 +120,6 @@ class LLMProvider:
         override = self._agent_overrides.get(aid, {})
         preset = override.get("preset")
 
-        # Fallback to soul.md default preset if not explicitly overridden
         if not preset and aid != "poseidon":
             from app.soul import soul_store
             agent = soul_store.get_agent(aid)
@@ -142,7 +140,6 @@ class LLMProvider:
             or settings.poseidon_model
         )
 
-        # Determine API key
         api_key = override.get("api_key")
         if not api_key:
             env_var = provider_def.get("api_key_env", "")
@@ -151,7 +148,6 @@ class LLMProvider:
             else:
                 api_key = provider_def.get("api_key") or self._get_api_key()
 
-        # Fallback for local ollama if key is not needed
         if preset == "local" or "localhost" in base_url or "11434" in base_url:
             api_key = api_key or "ollama"
 
@@ -280,5 +276,4 @@ class LLMProvider:
         }
 
 
-# Global singleton
 llm_provider = LLMProvider()

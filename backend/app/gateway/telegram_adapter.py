@@ -39,7 +39,6 @@ def is_user_allowed(sender_id: str | int) -> bool:
     """Check if the sender is authorized to talk to this local agent."""
     allowed = get_allowed_user_ids()
     if not allowed:
-        # If no allowlist is configured, permit (or reject if strict).
         return True
     return str(sender_id) in allowed
 
@@ -73,12 +72,10 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
     if not text:
         return {"status": "ignored", "reason": "Empty message text"}
 
-    # 1. Authorization check (Waku pattern)
     if not is_user_allowed(sender_id):
         print(f"[TelegramAdapter] Dropped message from unauthorized user ID: {sender_id}")
         return {"status": "rejected", "reason": f"Unauthorized user: {sender_id}"}
 
-    # 2. Check for pending approval resolution
     user_id = f"telegram_{sender_id}"
     token = bot_token or getattr(settings, "telegram_bot_token", "")
 
@@ -90,7 +87,6 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         clean = text.strip().lower()
         pin = getattr(settings, "poseidon_operator_pin", "").strip()
 
-        # Handle denial
         if clean in {"/deny", "deny", "no", "cancel", "reject", "abort"}:
             res = await resume_approval(pending["id"], "denied")
             reply_text = res.get("reply", "Action denied. No changes were made.")
@@ -98,7 +94,6 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
                 await send_telegram_reply(token, chat_id, reply_text)
             return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
 
-        # Handle approval
         approved = False
         if pin:
             if text.strip() == pin or clean == f"/approve {pin}".lower() or clean == f"approve {pin}".lower():
@@ -124,7 +119,6 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
                 await send_telegram_reply(token, chat_id, reply_text)
             return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
 
-    # 3. Normalize to InboundEvent
     tainted = is_channel_untrusted("telegram")
     event = InboundEvent(
         user_id=user_id,
@@ -136,7 +130,6 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         taint_sources=["telegram"] if tainted else [],
     )
 
-    # 4. Invoke Agent Harness
     from app.orchestration.router import route_request
 
     target_agent = route_request(text)
@@ -150,7 +143,6 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         auth_hint = "your Operator PIN" if pin else "'yes' or '/approve'"
         reply_text = f"⚠️ Approval Required: {tool_name} requires confirmation.\n\nReply with {auth_hint} to proceed, or 'deny' to cancel."
 
-    # 5. Outbound delivery back to Telegram
     if token and chat_id:
         await send_telegram_reply(token, chat_id, reply_text)
 
@@ -162,8 +154,6 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         "sender_id": sender_id,
     }
 
-
-# ── Webhook Endpoint (Server deployments) ───────────────────────────
 
 @router.post("/webhook")
 async def telegram_webhook(
@@ -180,8 +170,6 @@ async def telegram_webhook(
     result = await process_telegram_update(payload)
     return result
 
-
-# ── Local Long-Polling Runner (Waku pattern) ────────────────────────
 
 class TelegramLongPoller:
     """Async background task that runs long-polling locally on developer machines."""

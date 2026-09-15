@@ -14,7 +14,9 @@ from typing import Any
 
 from app.config import settings
 
+# These agents ship with the harness and cannot be deleted
 PREBUILT_IDS = {"poseidon", "nereus", "kraken"}
+# Hard cap on user-defined agents to keep the routing table manageable
 MAX_CUSTOM_AGENTS = 2
 
 
@@ -46,7 +48,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     fm_raw = match.group(1)
     body = match.group(2).strip()
 
-    # Try standard yaml if available
     try:
         import yaml  # type: ignore
 
@@ -56,7 +57,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     except Exception:
         pass
 
-    # Fallback YAML-like parser for zero-dependency resilience
     fm: dict[str, Any] = {}
     current_list_key: str | None = None
 
@@ -65,7 +65,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         if not stripped or stripped.startswith("#"):
             continue
 
-        # Handle list item: "- item"
         if stripped.startswith("- "):
             item_val = stripped[2:].strip().strip("\"'")
             if current_list_key:
@@ -74,7 +73,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 fm[current_list_key].append(item_val)
             continue
 
-        # Reset list key on normal key: value
         current_list_key = None
         if ":" in stripped:
             key, val = stripped.split(":", 1)
@@ -85,7 +83,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
                 items = [x.strip().strip("\"'") for x in val[1:-1].split(",") if x.strip()]
                 fm[key] = items
             elif not val:
-                # Potential start of indented list
                 current_list_key = key
                 fm[key] = []
             elif val.lower() == "true":
@@ -108,7 +105,6 @@ def _dump_frontmatter(metadata: dict[str, Any], body: str) -> str:
     except Exception:
         pass
 
-    # Fallback serializer
     lines = ["---"]
     for k, v in metadata.items():
         if isinstance(v, list):
@@ -165,7 +161,6 @@ class SoulStore:
             except Exception as e:
                 print(f"[SoulStore] Error loading {file_path.name}: {e}")
 
-        # Order: prebuilt agents first in standard order, then custom agents alphabetically
         ordered: dict[str, dict[str, Any]] = {}
         for pid in ["poseidon", "nereus", "kraken"]:
             if pid in discovered:
@@ -248,7 +243,7 @@ class SoulStore:
             "model_preset": updates.get("model_preset", existing["model_preset"]),
             "tools": list(updates.get("tools", existing["tools"])),
             "routing_signals": list(updates.get("routing_signals", existing["routing_signals"])),
-            "is_prebuilt": existing["is_prebuilt"],  # Cannot change prebuilt status
+            "is_prebuilt": existing["is_prebuilt"],
         }
 
         personality = updates.get("personality", existing["personality"]).strip()
@@ -311,5 +306,4 @@ class SoulStore:
         return self.load_all_agents(force_reload=True)
 
 
-# Global singleton
 soul_store = SoulStore()

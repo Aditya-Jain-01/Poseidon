@@ -1,3 +1,9 @@
+"""Notes and Reminders Tool — guarded personal task management.
+
+Writes pass through NoteGuard for injection detection and prompt leakage
+before committing to local JSON storage. Suspicious notes pause for operator approval.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,6 +13,7 @@ from app.security.note_guard import NoteGuard, SuspiciousNoteError
 
 
 def notes_reminders_read(query: str = "") -> dict[str, Any]:
+    """Search notes and reminders matching an optional case-insensitive substring."""
     data = read_json("notes.json", {"notes": [], "reminders": []})
     query = query.lower().strip()
     result = {key: [item for item in data.get(key, []) if not query or query in str(item).lower()] for key in ("notes", "reminders")}
@@ -14,10 +21,10 @@ def notes_reminders_read(query: str = "") -> dict[str, Any]:
 
 
 def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _operator_approved: bool = False) -> dict[str, Any]:
+    """Create a note or reminder, subject to NoteGuard security validation and storage quotas."""
     if kind not in {"note", "reminder"}:
         raise ValueError("kind must be note or reminder")
 
-    # ── Security gate (3-tier adaptive policy) ────────────────────────────
     verdict = NoteGuard.inspect(text)
 
     if verdict.verdict == "reject":
@@ -25,9 +32,6 @@ def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _ope
         raise ValueError(f"Note creation blocked by security policy: {reason}")
 
     if verdict.verdict == "suspicious" and not _operator_approved:
-        # Raise sentinel — orchestrator catches this and re-routes to the
-        # approval_gate node.  The original arguments are preserved so the
-        # tool can be re-executed after the operator approves.
         raise SuspiciousNoteError(
             kind=kind,
             text=text,
@@ -35,7 +39,6 @@ def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _ope
             reasons=verdict.reasons,
         )
 
-    # ── Tier 1: clean — persist immediately ───────────────────────────────
     data = read_json("notes.json", {"notes": [], "reminders": []})
     NoteGuard.check_storage_capacity(data)
 
@@ -49,6 +52,7 @@ def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _ope
 
 
 def notes_reminders_delete(kind: str, item_id: str) -> dict[str, Any]:
+    """Delete a note or reminder by its unique UUID."""
     key = "notes" if kind == "note" else "reminders" if kind == "reminder" else None
     if key is None:
         raise ValueError("kind must be note or reminder")

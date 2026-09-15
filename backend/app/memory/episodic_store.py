@@ -44,7 +44,9 @@ class EpisodicStore:
 
     @contextmanager
     def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager creating a connection with sqlite-vec loaded if available."""
+        """Each call opens a fresh connection with WAL mode and sqlite-vec loaded.
+        We don't pool connections because SQLite WAL already handles concurrency.
+        """
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), timeout=10.0)
         conn.row_factory = sqlite3.Row
@@ -63,12 +65,15 @@ class EpisodicStore:
             conn.close()
 
     def init_db(self) -> None:
-        """Initialize database schema, tables, indices, and vec0 virtual table."""
+        """Create tables, indices, and the vec0 virtual table for KNN search.
+        The vec0 table creation may fail if sqlite-vec isn't available,
+        in which case we fall back to a plain TEXT column and do cosine
+        similarity in Python (slower but functional).
+        """
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            # 1. Base episodic log table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS episodic_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,13 +88,11 @@ class EpisodicStore:
                 );
             """)
 
-            # Ensure 'consolidated' column exists in case state.db pre-dates migration
             try:
                 cursor.execute("ALTER TABLE episodic_events ADD COLUMN consolidated INTEGER NOT NULL DEFAULT 0")
             except Exception:
                 pass
 
-            # 2. Indices for recency & consolidation queries
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_episodic_user_created 
                 ON episodic_events(user_id, created_at DESC);
@@ -99,7 +102,6 @@ class EpisodicStore:
                 ON episodic_events(consolidated);
             """)
 
-            # 3. sqlite-vec virtual table for vector similarity search (or fallback table)
             try:
                 cursor.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodes USING vec0(
@@ -133,7 +135,6 @@ class EpisodicStore:
         meta_json = json.dumps(metadata) if metadata else None
         ts = created_at.isoformat() if isinstance(created_at, datetime) else created_at
 
-        # Generate the embedding vector for this content
         vector = self._embed.embed_text(content)
         vec_json = json.dumps(vector)
 
@@ -157,7 +158,6 @@ class EpisodicStore:
                 )
             event_id = cursor.lastrowid
 
-            # Insert the vector into vec_episodes (rowid must match event id)
             try:
                 cursor.execute(
                     "INSERT INTO vec_episodes(rowid, embedding) VALUES (?, ?)",
@@ -231,24 +231,21 @@ class EpisodicStore:
         query: str,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Search episodic events using vector similarity (KNN).
+        """KNN vector search over episodic events.
 
-        Embeds the query, finds the closest vectors in vec_episodes,
-        then joins back to episodic_events for the full record.
-        Filters by user_id after the KNN search.
+        Primary path uses sqlite-vec's MATCH operator for native KNN.
+        Falls back to brute-force cosine similarity in Python if sqlite-vec
+        isn't available or the virtual table schema doesn't match.
         """
         if not query.strip():
             return []
 
-        # Embed the query text
         query_vector = self._embed.embed_text(query)
         vec_json = json.dumps(query_vector)
 
-        # KNN search via sqlite-vec: fetch more than `limit` to allow for
-        # user_id filtering (vec0 doesn't support WHERE on external columns)
+        # Over-fetch because vec0 can't filter by user_id in the KNN query
         fetch_limit = limit * 4
 
-        # sqlite-vec requires `AND k = ?` instead of `LIMIT ?` for KNN queries
         sql = """
             SELECT v.rowid AS event_id, v.distance
             FROM vec_episodes v
@@ -281,7 +278,6 @@ class EpisodicStore:
                         results.append(event_dict)
                 return results
             except sqlite3.OperationalError:
-                # Fallback: load embeddings from table and compute cosine distance in Python
                 try:
                     cursor.execute("""
                         SELECT e.id, e.user_id, e.channel, e.run_id, e.role, e.content, e.created_at, e.metadata, e.consolidated, v.embedding
@@ -349,16 +345,13 @@ class EpisodicStore:
         recency_limit: int = 5,
         relevance_limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Retrieve episodic events semantically relevant to the user query.
-
-        If a query is provided, performs vector similarity search to avoid
-        polluting the context with unrelated prior session chat history.
+        """Hybrid retrieval: vector similarity when a query is provided,
+        plain recency otherwise. This avoids polluting Working Memory
+        with unrelated chat history from prior sessions.
         """
         if not query or not query.strip():
-            # If no query provided, return recent events as fallback
             return self.get_recent(user_id, limit=recency_limit)
 
-        # Vector RAG search for semantically relevant episodic events
         relevant_events = self.search_relevant(user_id, query.strip(), limit=relevance_limit)
         seen_ids = set()
         combined: list[dict[str, Any]] = []
@@ -418,7 +411,6 @@ class EpisodicStore:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             if user_id:
-                # Get IDs to delete from vec table
                 cursor.execute("SELECT id FROM episodic_events WHERE user_id = ?", (user_id,))
                 ids = [row[0] for row in cursor.fetchall()]
                 cursor.execute("DELETE FROM episodic_events WHERE user_id = ?", (user_id,))
@@ -430,5 +422,4 @@ class EpisodicStore:
             conn.commit()
 
 
-# App-wide singleton instance
 episodic_store = EpisodicStore()

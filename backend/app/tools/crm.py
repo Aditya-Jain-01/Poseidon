@@ -1,3 +1,5 @@
+"""CRM Tool — manages customer and contact records with approval gating."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -6,6 +8,7 @@ from ._storage import read_json, write_json
 
 
 def crm_read(query: str = "") -> dict[str, Any]:
+    """Retrieve CRM contacts matching an optional substring query."""
     contacts = read_json("crm_data.json", {"contacts": []}).get("contacts", [])
     query = query.lower().strip()
     matches = [c for c in contacts if not query or query in str(c).lower()]
@@ -13,6 +16,7 @@ def crm_read(query: str = "") -> dict[str, Any]:
 
 
 def crm_write(action: str, contact: dict[str, Any] | None = None, contact_id: str | None = None) -> dict[str, Any]:
+    """Execute create, update, or delete mutations on contacts (classified as approval_required)."""
     data = read_json("crm_data.json", {"contacts": []})
     contacts = data.setdefault("contacts", [])
     action = action.lower()

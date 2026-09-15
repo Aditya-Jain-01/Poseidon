@@ -6,6 +6,8 @@ from collections import defaultdict
 from typing import Any
 
 
+# Scrubs API keys, tokens, and bearer headers from trajectory logs
+# so they never appear in the /runs/{run_id}/trajectory API response
 _SECRET_PATTERN = re.compile(
     r"(?i)(sk-[a-zA-Z0-9_-]{20,}|nvapi-[a-zA-Z0-9_-]{20,}|ghp_[a-zA-Z0-9]{36}|bearer\s+[a-zA-Z0-9._-]+|token=[a-zA-Z0-9._-]+)"
 )

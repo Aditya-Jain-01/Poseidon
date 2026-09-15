@@ -37,11 +37,12 @@ class ContentRiskCategory(str, Enum):
     AUTHORIZATION_MANIPULATION = "AUTHORIZATION_MANIPULATION"
 
 
-# Known trusted channels vs untrusted external channels
+# Channels where the operator has direct control
 TRUSTED_CHANNELS = {"web", "web_operator", "cli", "local"}
+# Channels where input comes from external, potentially adversarial sources
 UNTRUSTED_CHANNELS = {"telegram", "email", "incoming_webhook", "mcp_untrusted", "external_api"}
 
-# Standard tool tiers per GUARDRAILS.md
+# Read-only tools that can auto-execute even from untrusted channels
 BASE_AUTORUN_TOOLS = {
     "crm_read",
     "calendar_read",
@@ -50,10 +51,6 @@ BASE_AUTORUN_TOOLS = {
 }
 
 BASE_GUARDED_AUTO_TOOLS = {
-    # These tools run automatically for benign input but dynamically escalate
-    # to the approval gate when their internal NoteGuard validator flags
-    # suspicious content (credentials, URLs, injection patterns).
-    # They are NOT in BASE_APPROVAL_REQUIRED_TOOLS — routing is adaptive.
     "notes_reminders_create",
 }
 
@@ -115,7 +112,6 @@ AUTHORIZATION_MANIPULATION_PATTERNS = [
     (r"(?i)\bexecute\s+(without|bypassing)\s+(approval|confirmation|checks?)\b", "Direct unapproved execution request"),
 ]
 
-# Compile pattern tables
 _COMPILED_INJECTIONS = [(re.compile(p), label) for p, label in PROMPT_INJECTION_PATTERNS]
 _COMPILED_CREDENTIALS = [(re.compile(p), label) for p, label in CREDENTIAL_REQUEST_PATTERNS]
 _COMPILED_DESTRUCTIVE = [(re.compile(p), label) for p, label in DESTRUCTIVE_ACTION_PATTERNS]
@@ -172,28 +168,24 @@ def evaluate_content_risk(message: str | None) -> dict[str, Any]:
     detected_patterns: list[dict[str, str]] = []
     categories: set[ContentRiskCategory] = set()
 
-    # 1. Check prompt injections
     for regex, label in _COMPILED_INJECTIONS:
         match = regex.search(text)
         if match:
             detected_patterns.append({"pattern": label, "matched": match.group(0), "category": ContentRiskCategory.PROMPT_INJECTION.value})
             categories.add(ContentRiskCategory.PROMPT_INJECTION)
 
-    # 2. Check credential requests
     for regex, label in _COMPILED_CREDENTIALS:
         match = regex.search(text)
         if match:
             detected_patterns.append({"pattern": label, "matched": match.group(0), "category": ContentRiskCategory.CREDENTIAL_REQUEST.value})
             categories.add(ContentRiskCategory.CREDENTIAL_REQUEST)
 
-    # 3. Check destructive / exfiltration actions
     for regex, label in _COMPILED_DESTRUCTIVE:
         match = regex.search(text)
         if match:
             detected_patterns.append({"pattern": label, "matched": match.group(0), "category": ContentRiskCategory.DESTRUCTIVE_ACTION.value})
             categories.add(ContentRiskCategory.DESTRUCTIVE_ACTION)
 
-    # 4. Check authorization manipulation
     for regex, label in _COMPILED_AUTH_MANIP:
         match = regex.search(text)
         if match:
@@ -286,7 +278,6 @@ def calculate_overall_risk(
         overall_level = RiskLevel.LOW
         reasons.append("Trusted source and benign content.")
 
-    # Context is tainted if source is untrusted OR content is suspicious
     is_tainted = is_untrusted_source or is_suspicious_content
 
     return {
@@ -337,13 +328,11 @@ def evaluate_tool_tier(
         risk_level = RiskLevel[risk_context.upper()]
         tainted_flag = risk_level != RiskLevel.LOW
 
-    # Handle backwards-compatible is_tainted arg
     if is_tainted is not None:
         tainted_flag = bool(is_tainted)
         if tainted_flag and risk_level == RiskLevel.LOW:
             risk_level = RiskLevel.MEDIUM
 
-    # 1. Check if tool is natively approval-required or unknown
     if tool in BASE_APPROVAL_REQUIRED_TOOLS:
         reasons.append(f"Tool '{tool_name}' is in the approval-required tier by policy.")
         return {

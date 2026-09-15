@@ -64,12 +64,13 @@ class SemanticStore:
             conn.close()
 
     def init_db(self) -> None:
-        """Initialize semantic memory tables and FTS5 index inside state.db."""
+        """Set up the facts table, FTS5 index, and triggers that keep them in sync.
+        The FTS5 virtual table enables BM25-ranked keyword search over facts.
+        """
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            # 1. Semantic facts table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS semantic_facts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,13 +84,11 @@ class SemanticStore:
                 );
             """)
 
-            # 2. Index for user + category lookups
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_semantic_user_category
                 ON semantic_facts(user_id, category, active);
             """)
 
-            # 3. FTS5 virtual table for keyword search over facts
             cursor.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS semantic_fts USING fts5(
                     fact,
@@ -100,7 +99,6 @@ class SemanticStore:
                 );
             """)
 
-            # 4. Triggers to keep FTS5 in sync with semantic_facts
             cursor.execute("""
                 CREATE TRIGGER IF NOT EXISTS trg_semantic_after_insert
                 AFTER INSERT ON semantic_facts
@@ -130,8 +128,6 @@ class SemanticStore:
 
             conn.commit()
 
-    # ── Write Operations ──
-
     def add_fact(
         self,
         user_id: str,
@@ -155,7 +151,6 @@ class SemanticStore:
             fact_id = cursor.lastrowid
             conn.commit()
 
-        # Regenerate the human-readable mirror
         self._regenerate_memory_md(user_id)
         return int(fact_id)
 
@@ -175,7 +170,6 @@ class SemanticStore:
             conn.commit()
 
         if updated:
-            # Find the user_id to regenerate their MEMORY.md
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT user_id FROM semantic_facts WHERE id = ?", (fact_id,))
@@ -188,7 +182,6 @@ class SemanticStore:
         """Soft-delete a fact (mark as inactive). Returns True if deactivated."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            # Get user_id before deactivating
             cursor.execute("SELECT user_id FROM semantic_facts WHERE id = ?", (fact_id,))
             row = cursor.fetchone()
             user_id = row["user_id"] if row else None
@@ -203,8 +196,6 @@ class SemanticStore:
         if deactivated and user_id:
             self._regenerate_memory_md(user_id)
         return deactivated
-
-    # ── Read Operations ──
 
     def get_all_facts(self, user_id: str, category: str | None = None) -> list[dict[str, Any]]:
         """Get all active semantic facts for a user, optionally filtered by category."""
@@ -235,7 +226,6 @@ class SemanticStore:
         """
         sanitized = _sanitize_fts_query(query)
         if not sanitized:
-            # Fall back to returning all facts if query can't be tokenized
             return self.get_all_facts(user_id)[:limit]
 
         sql = """
@@ -256,22 +246,17 @@ class SemanticStore:
                 rows = cursor.fetchall()
                 return [dict(row) for row in rows]
             except sqlite3.OperationalError:
-                # FTS query failed — fall back to returning recent facts
                 return self.get_all_facts(user_id)[:limit]
-
-    # ── MEMORY.md Mirror ──
 
     def _regenerate_memory_md(self, user_id: str) -> None:
         """Regenerate the human-readable MEMORY.md file from current facts.
-
-        This is the mirror that you can open and read at any time.
-        The database is the source of truth; this file is just the view.
+        This is a read-only mirror for debugging — the database is the
+        source of truth. Gets rewritten on every fact add/update/delete.
         """
         facts = self.get_all_facts(user_id)
         if not facts:
             return
 
-        # Group facts by category
         by_category: dict[str, list[dict[str, Any]]] = {}
         for f in facts:
             cat = f.get("category", "general")
@@ -300,11 +285,8 @@ class SemanticStore:
                 lines.append(f"- {f['fact']}  _{ts}_")
             lines.append("")
 
-        # Write the file
         self.memory_md_path.parent.mkdir(parents=True, exist_ok=True)
         self.memory_md_path.write_text("\n".join(lines), encoding="utf-8")
-
-    # ── Utility ──
 
     def clear(self, user_id: str | None = None) -> None:
         """Clear semantic facts (useful for test isolation)."""
@@ -330,5 +312,4 @@ class SemanticStore:
             return cursor.fetchone()[0]
 
 
-# App-wide singleton instance
 semantic_store = SemanticStore()

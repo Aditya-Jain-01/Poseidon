@@ -16,8 +16,6 @@ from app.soul import soul_store
 from app.llm_providers import llm_provider
 
 
-# ── Request / Response Models ──────────────────────────────────────
-
 class CreateAgentRequest(BaseModel):
     """Payload for creating a new custom agent."""
     display_name: str
@@ -52,12 +50,7 @@ class UpdateLLMRequest(BaseModel):
     model: str | None = None
 
 
-# ── Router ─────────────────────────────────────────────────────────
-
 router = APIRouter(tags=["Agents & Settings"])
-
-
-# ── Agent CRUD ─────────────────────────────────────────────────────
 
 @router.get("/agents")
 async def list_agents() -> list[dict[str, Any]]:
@@ -120,8 +113,6 @@ async def reload_agents() -> dict[str, Any]:
     agents = soul_store.reload()
     return {"status": "reloaded", "count": len(agents), "agents": [a["id"] for a in agents]}
 
-
-# ── LLM Settings ──────────────────────────────────────────────────
 
 @router.get("/settings/llm")
 async def get_llm_settings() -> dict[str, Any]:

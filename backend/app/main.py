@@ -18,11 +18,9 @@ from app.gateway.trajectory_adapter import router as trajectory_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: start local Telegram long-poller if configured
     if settings.telegram_polling_enabled and settings.telegram_bot_token:
         telegram_poller.start()
     yield
-    # Shutdown: stop poller
     telegram_poller.stop()
 
 
@@ -61,7 +59,6 @@ async def health():
     }
 
 
-# Serve built frontend if dist directory exists
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")

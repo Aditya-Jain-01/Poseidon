@@ -79,13 +79,11 @@ def _extract_json(text: str) -> dict[str, Any]:
     if not text:
         return {"facts": [], "skills": []}
 
-    # Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Try finding json block inside markdown fences
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
         try:
@@ -93,7 +91,6 @@ def _extract_json(text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # Try finding outermost braces
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
@@ -142,9 +139,11 @@ async def summarize_and_consolidate(
     user_id: str,
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Distill events, persist extracted facts & skills, and mark events as consolidated.
-
-    Returns summary details including added counts and event IDs.
+    """End-to-end consolidation pipeline:
+    1. LLM extracts candidate facts & skills from episodic events
+    2. AdversarialReviewer filters out memory-poisoning attempts
+    3. Safe facts → SemanticStore, safe skills → ProceduralStore
+    4. Processed events marked as consolidated in EpisodicStore
     """
     if not events:
         return {
@@ -156,16 +155,13 @@ async def summarize_and_consolidate(
             "skills": [],
         }
 
-    # 1. Run LLM summarization
     summary = await summarize_events(events)
     raw_facts = summary.get("facts", [])
     raw_skills = summary.get("skills", [])
 
-    # 1b. Pass candidate items through AdversarialReviewer (Memory Poisoning Filter)
     extracted_facts, rejected_facts = AdversarialReviewer.filter_facts(raw_facts)
     extracted_skills, rejected_skills = AdversarialReviewer.filter_skills(raw_skills)
 
-    # 2. Persist safe semantic facts
     added_fact_ids = []
     latest_run_id = next((e.get("run_id") for e in reversed(events) if e.get("run_id")), None)
 
@@ -183,7 +179,6 @@ async def summarize_and_consolidate(
             )
             added_fact_ids.append(fact_id)
 
-    # 3. Persist safe procedural skills if any
     added_skill_names = []
     for skill_item in extracted_skills:
         if isinstance(skill_item, dict) and skill_item.get("name") and skill_item.get("content"):
@@ -201,7 +196,6 @@ async def summarize_and_consolidate(
             )
             added_skill_names.append(name)
 
-    # 4. Mark episodic events as consolidated
     event_ids = [e["id"] for e in events if "id" in e]
     if event_ids:
         try:
