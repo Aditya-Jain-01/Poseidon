@@ -7,10 +7,10 @@ from uuid import uuid4
 from ._storage import read_json, write_json
 
 
-def calendar_read(query: str = "") -> dict[str, Any]:
+def calendar_read(query: str | None = "") -> dict[str, Any]:
     """Retrieve scheduled calendar events, optionally filtered by search text."""
     events = read_json("calendar.json", {"events": []}).get("events", [])
-    query = query.lower().strip()
+    query = (query or "").lower().strip()
     events = [event for event in events if not query or query in str(event).lower()]
     return {"events": events, "count": len(events)}
 

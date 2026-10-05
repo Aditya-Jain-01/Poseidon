@@ -12,10 +12,10 @@ from ._storage import read_json, write_json
 from app.security.note_guard import NoteGuard, SuspiciousNoteError
 
 
-def notes_reminders_read(query: str = "") -> dict[str, Any]:
+def notes_reminders_read(query: str | None = "") -> dict[str, Any]:
     """Search notes and reminders matching an optional case-insensitive substring."""
     data = read_json("notes.json", {"notes": [], "reminders": []})
-    query = query.lower().strip()
+    query = (query or "").lower().strip()
     result = {key: [item for item in data.get(key, []) if not query or query in str(item).lower()] for key in ("notes", "reminders")}
     return result
 

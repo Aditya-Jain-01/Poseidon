@@ -7,10 +7,10 @@ from uuid import uuid4
 from ._storage import read_json, write_json
 
 
-def crm_read(query: str = "") -> dict[str, Any]:
+def crm_read(query: str | None = "") -> dict[str, Any]:
     """Retrieve CRM contacts matching an optional substring query."""
     contacts = read_json("crm_data.json", {"contacts": []}).get("contacts", [])
-    query = query.lower().strip()
+    query = (query or "").lower().strip()
     matches = [c for c in contacts if not query or query in str(c).lower()]
     return {"contacts": matches, "count": len(matches)}
 

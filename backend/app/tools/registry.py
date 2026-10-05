@@ -28,19 +28,28 @@ def _schema(name: str, description: str, properties: dict[str, Any], required: l
     }
 
 
+def _optional_query(description: str) -> dict[str, Any]:
+    """JSON Schema for search text that providers may legitimately emit as null."""
+    return {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "description": description,
+        "default": "",
+    }
+
+
 # Tier meanings:
 #   auto             — runs without user interaction
 #   guarded_auto     — auto but NoteGuard may escalate to approval
 #   approval_required — always pauses for operator confirmation
 BASE_TOOL_REGISTRY: dict[str, dict[str, Any]] = {
-    "crm_read": {"tier": "auto", "handler": crm.crm_read, "schema": _schema("crm_read", "Search local CRM contacts.", {"query": {"type": "string"}})},
+    "crm_read": {"tier": "auto", "handler": crm.crm_read, "schema": _schema("crm_read", "Search local CRM contacts.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all contacts.")})},
     "crm_write": {"tier": "approval_required", "handler": crm.crm_write, "schema": _schema("crm_write", "Create, update, or delete a local CRM contact.", {"action": {"type": "string", "enum": ["create", "update", "delete"]}, "contact": {"type": "object"}, "contact_id": {"type": "string"}}, ["action"])},
-    "notes_reminders_read": {"tier": "auto", "handler": notes_reminders.notes_reminders_read, "schema": _schema("notes_reminders_read", "Read local notes and reminders.", {"query": {"type": "string"}})},
+    "notes_reminders_read": {"tier": "auto", "handler": notes_reminders.notes_reminders_read, "schema": _schema("notes_reminders_read", "Read local notes and reminders.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all notes and reminders.")})},
     "notes_reminders_create": {"tier": "guarded_auto", "handler": notes_reminders.notes_reminders_create, "schema": _schema("notes_reminders_create", "Create a note or reminder.", {"kind": {"type": "string", "enum": ["note", "reminder"]}, "text": {"type": "string"}, "due_at": {"type": "string"}}, ["kind", "text"])},
     "notes_reminders_delete": {"tier": "approval_required", "handler": notes_reminders.notes_reminders_delete, "schema": _schema("notes_reminders_delete", "Delete a note or reminder.", {"kind": {"type": "string", "enum": ["note", "reminder"]}, "item_id": {"type": "string"}}, ["kind", "item_id"])},
-    "calendar_read": {"tier": "auto", "handler": calendar.calendar_read, "schema": _schema("calendar_read", "Read local calendar events.", {"query": {"type": "string"}})},
+    "calendar_read": {"tier": "auto", "handler": calendar.calendar_read, "schema": _schema("calendar_read", "Read local calendar events.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all local events.")})},
     "calendar_create": {"tier": "approval_required", "handler": calendar.calendar_create, "schema": _schema("calendar_create", "Create a local calendar event.", {"title": {"type": "string"}, "starts_at": {"type": "string"}, "ends_at": {"type": "string"}, "description": {"type": "string"}}, ["title", "starts_at"])},
-    "skill_manage_read": {"tier": "auto", "handler": skill_manage.skill_manage_read, "schema": _schema("skill_manage_read", "List procedural skills.", {"query": {"type": "string"}})},
+    "skill_manage_read": {"tier": "auto", "handler": skill_manage.skill_manage_read, "schema": _schema("skill_manage_read", "List procedural skills.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all skills.")})},
     "skill_manage_write": {"tier": "approval_required", "handler": skill_manage.skill_manage_write, "schema": _schema("skill_manage_write", "Create a procedural skill.", {"name": {"type": "string"}, "description": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}}, "content": {"type": "string"}}, ["name", "description", "triggers", "content"])},
 }
 
