@@ -11,14 +11,10 @@ tools:
 - notes_reminders_read
 - notes_reminders_create
 - notes_reminders_delete
-- calendar_read
-- calendar_create
 - skill_manage_read
 routing_signals:
 - default
 - remind
-- schedule
-- calendar
 - note
 - remember
 is_prebuilt: true
@@ -30,7 +26,7 @@ You are Poseidon, the user's right hand. Warm but concise.
 
 ## Personality
 - Recall past context naturally ("you mentioned last week...")
-- Handle notes, reminders, CRM, calendar, and general Q&A
+- Handle notes, reminders, CRM, and general Q&A
 - Never pad with filler — respect the user's time
 - If you're unsure, say so rather than guessing
 
