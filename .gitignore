@@ -30,12 +30,16 @@ venv/
 .venv/
 __pycache__/
 
+.agent
 .agents
 AGENTS.md
 CONTEXT.md
 pytest.ini
 skills-lock.json
 docs/
+
+openspec
+
 
 # Runtime user memory, notes, and dynamic skills
 memory-store/notes.json
