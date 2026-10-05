@@ -32,13 +32,6 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
     }
   }, [overviewTab]);
 
-  // If a turn was selected, switch to 'turn' tab
-  useEffect(() => {
-    if (selectedTurn) {
-      setActiveTab('turn');
-    }
-  }, [selectedTurn]);
-
   const handleTabClick = (tab) => {
     setActiveTab(tab);
     if (setOverviewTab) setOverviewTab(tab);
@@ -47,30 +40,6 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
   // Find latest agent message if none specifically selected
   const displayTurn = selectedTurn || messages.slice().reverse().find((m) => m.role === 'agent');
 
-  // Auto-cycle nodes during loading animation
-  const [pulseStepIndex, setPulseStepIndex] = useState(0);
-  useEffect(() => {
-    if (!isLoading) return;
-    const interval = setInterval(() => {
-      setPulseStepIndex((prev) => (prev + 1) % 5);
-    }, 700);
-    return () => clearInterval(interval);
-  }, [isLoading]);
-
-  let activeNodes = ['gateway', 'harness', 'agent'];
-  if (isLoading) {
-    const pulseSequences = [
-      ['gateway'],
-      ['harness', 'agent'],
-      ['harness', 'agent', 'procedural', 'semantic'],
-      ['harness', 'agent', 'tools'],
-      ['gateway', 'agent', 'episodic', 'summarizer']
-    ];
-    activeNodes = pulseSequences[pulseStepIndex];
-  }
-
-  if (isCollapsed) return null;
-
   const mem = displayTurn?.memoryContext || {
     semantic_facts: [],
     episodic_events: [],
@@ -78,6 +47,56 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
   };
 
   const trajectory = displayTurn?.trajectory || [];
+
+  // Derive topology from the selected run instead of cycling decorative nodes.
+  const activeNodeSet = new Set();
+  if (displayTurn?.runId || isLoading) {
+    activeNodeSet.add('gateway');
+    activeNodeSet.add('harness');
+  }
+  if (isLoading) activeNodeSet.add('agent');
+
+  trajectory.forEach((step) => {
+    const type = String(step.step_type || '').toLowerCase();
+    if (type === 'route') {
+      activeNodeSet.add('gateway');
+      activeNodeSet.add('harness');
+    }
+    if (type === 'agent') activeNodeSet.add('agent');
+    if (['tool_executed', 'approval_requested', 'suspicious_note_escalated'].includes(type)) {
+      activeNodeSet.add('tools');
+    }
+    if (['approval_requested', 'suspicious_note_escalated', 'limit'].includes(type)) {
+      activeNodeSet.add('llmops');
+    }
+    if (type.includes('consolidat') || type.includes('summar')) {
+      activeNodeSet.add('summarizer');
+    }
+  });
+
+  if (displayTurn?.content && trajectory.length === 0) activeNodeSet.add('agent');
+  if ((mem.semantic_facts?.length || 0) > 0) activeNodeSet.add('semantic');
+  if ((mem.episodic_events?.length || 0) > 0) activeNodeSet.add('episodic');
+  if ((mem.procedural_skills?.length || 0) > 0) activeNodeSet.add('procedural');
+
+  const activeNodes = [...activeNodeSet];
+  const topologyToolNames = [...new Set(
+    trajectory
+      .filter((step) => ['tool_executed', 'approval_requested', 'suspicious_note_escalated'].includes(step.step_type))
+      .map((step) => step.tool_name)
+      .filter(Boolean)
+  )];
+  const activePaths = [
+    activeNodeSet.has('gateway') && activeNodeSet.has('harness') ? 'gateway-harness' : null,
+    activeNodeSet.has('agent') && activeNodeSet.has('tools') ? 'agent-tools' : null,
+    activeNodeSet.has('procedural') ? 'harness-procedural' : null,
+    activeNodeSet.has('semantic') ? 'harness-semantic' : null,
+    activeNodeSet.has('episodic') ? 'harness-episodic' : null,
+    activeNodeSet.has('summarizer') && activeNodeSet.has('semantic') ? 'semantic-summarizer' : null,
+    activeNodeSet.has('summarizer') && activeNodeSet.has('episodic') ? 'episodic-summarizer' : null,
+  ].filter(Boolean);
+
+  if (isCollapsed) return null;
 
   return (
     <aside className="right-panel" style={{ width: width ? `${width}px` : undefined }}>
@@ -110,7 +129,7 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
           onClick={() => handleTabClick('turn')}
         >
           <Brain size={13} />
-          <span>Turn Audit</span>
+          <span>Turn</span>
         </button>
         <button
           type="button"
@@ -155,7 +174,7 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
                 {/* Section: Semantic Facts */}
                 <div className="inspector-section">
                   <div className="inspector-section-header">
-                    <Brain size={13} className="text-emerald" />
+                    <Brain size={13} className="text-ocean-blue" />
                     <span>Semantic Facts Injected ({mem.semantic_facts?.length || 0})</span>
                   </div>
                   {mem.semantic_facts?.length > 0 ? (
@@ -172,7 +191,7 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
                 {/* Section: Episodic Memory */}
                 <div className="inspector-section">
                   <div className="inspector-section-header">
-                    <Calendar size={13} className="text-blue" />
+                    <Calendar size={13} className="text-ocean-cyan" />
                     <span>Episodic Memory Recalled ({mem.episodic_events?.length || 0})</span>
                   </div>
                   {mem.episodic_events?.length > 0 ? (
@@ -192,7 +211,7 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
                 {/* Section: Procedural Skills */}
                 <div className="inspector-section">
                   <div className="inspector-section-header">
-                    <FileText size={13} className="text-amber" />
+                    <FileText size={13} className="text-ocean-sky" />
                     <span>Active Skills ({mem.procedural_skills?.length || 0})</span>
                   </div>
                   {mem.procedural_skills?.length > 0 ? (
@@ -246,10 +265,20 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
         {activeTab === 'topology' && (
           <div className="topology-tab-view animate-fade-in">
             <p className="tab-hint">
-              Poseidon Multi-Tier Memory &amp; Harness Architecture
+              {displayTurn
+                ? 'Highlighted nodes participated in the selected run.'
+                : isLoading
+                  ? 'Showing the currently known request path.'
+                  : 'Select or run a turn to inspect its execution path.'}
             </p>
             <div className="topology-wrapper">
-              <ArchitectureMap activeNodes={activeNodes} />
+              <ArchitectureMap
+                activeNodes={activeNodes}
+                activePaths={activePaths}
+                modelName={modelName}
+                agentName={displayTurn?.activeAgent || 'poseidon'}
+                toolNames={topologyToolNames}
+              />
             </div>
           </div>
         )}

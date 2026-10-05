@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import LeftSidebar from './components/LeftSidebar/LeftSidebar';
 import RightPanel from './components/RightPanel/RightPanel';
+import AgentView from './components/AgentView/AgentView';
 import Gateway from './pages/Gateway/Gateway';
 import Settings from './pages/Settings/Settings';
 import { ChatProvider, useChat } from './context/ChatContext';
@@ -16,6 +17,7 @@ function AppLayout() {
   const [isRightCollapsed, setIsRightCollapsed] = useState(true);
   const [rightPanelWidth, setRightPanelWidth] = useState(380);
   const [isResizingRight, setIsResizingRight] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState('chat'); // 'chat' | 'agents'
 
   const { isOverviewOpen, toggleOverview, closeOverview } = useChat();
 
@@ -67,20 +69,22 @@ function AppLayout() {
       <LeftSidebar
         isCollapsed={isLeftCollapsed}
         onToggleCollapse={handleToggleLeft}
+        sidebarMode={sidebarMode}
+        onModeChange={setSidebarMode}
       />
 
-      {/* 2. Center Main Canvas (Top bar removed) */}
+      {/* 2. Center Main Canvas */}
       <div className="center-workspace">
         <main className="center-content">
           <Routes>
-            <Route path="/" element={<ChatDock />} />
+            <Route path="/" element={sidebarMode === 'agents' ? <AgentView /> : <ChatDock />} />
             <Route path="/gateway" element={<Gateway />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </div>
 
-      {/* 3. Right Trajectory & Diagnostics Inspector Side Window */}
+      {/* 3. Right Inspector Panel */}
       <RightPanel
         isCollapsed={isRightCollapsed}
         onToggleCollapse={handleToggleRight}

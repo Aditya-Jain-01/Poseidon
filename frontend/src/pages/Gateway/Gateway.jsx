@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/common/Card';
 import TabBar from '../../components/common/TabBar';
-import EmptyState from '../../components/common/EmptyState';
 import { useChat } from '../../context/ChatContext';
+import { useHealth } from '../../context/HealthContext';
 import { 
   Radio, 
   ArrowDownLeft, 
@@ -20,6 +20,7 @@ import './Gateway.css';
 export function Gateway() {
   const navigate = useNavigate();
   const { sessions, activeSessionId, switchSession, messages: activeSessionMessages } = useChat();
+  const { isConnected, telegramPolling } = useHealth();
   
   const [selectedScope, setSelectedScope] = useState('current'); // 'current' | 'all' | <sessionId>
   const [activeTab, setActiveTab] = useState('all');
@@ -80,10 +81,16 @@ export function Gateway() {
   }, [activeTab, scopedMessages]);
 
   const tabs = [
-    { key: 'all', label: 'All Channels', count: displayMessages.length },
-    { key: 'web', label: 'Web / CLI', count: displayMessages.length },
-    { key: 'telegram', label: 'Telegram (Planned)', count: 0 },
-    { key: 'discord', label: 'Discord (Planned)', count: 0 },
+    { key: 'all', label: 'All Channels', count: scopedMessages.length },
+    { key: 'web', label: 'Web / CLI', count: scopedMessages.length, status: isConnected ? 'connected' : undefined },
+    {
+      key: 'telegram',
+      label: 'Telegram',
+      badge: telegramPolling ? 'Polling' : 'Disabled',
+      badgeVariant: telegramPolling ? 'connected' : 'planned',
+      status: telegramPolling ? 'connected' : undefined,
+    },
+    { key: 'discord', label: 'Discord', badge: 'Planned', badgeVariant: 'planned' },
   ];
 
   const formatTimestamp = (isoString) => {
@@ -136,6 +143,33 @@ export function Gateway() {
         </div>
       </div>
 
+      <section className="gateway-overview" aria-label="Gateway summary">
+        <article className="gateway-summary-item">
+          <div className="gateway-summary-icon"><MessageSquare size={16} /></div>
+          <div>
+            <span className="gateway-summary-label">Events in scope</span>
+            <strong>{scopedMessages.length}</strong>
+          </div>
+        </article>
+        <article className="gateway-summary-item">
+          <div className="gateway-summary-icon"><Layers size={16} /></div>
+          <div>
+            <span className="gateway-summary-label">Conversations</span>
+            <strong>{sessions.length}</strong>
+          </div>
+        </article>
+        <article className="gateway-summary-item gateway-summary-status">
+          <div className={`gateway-summary-icon ${telegramPolling ? 'is-live' : ''}`}><Radio size={16} /></div>
+          <div>
+            <span className="gateway-summary-label">Channel runtime</span>
+            <strong>{telegramPolling ? 'Web + Telegram live' : 'Web / CLI live'}</strong>
+          </div>
+          <span className={`runtime-indicator ${isConnected ? 'is-live' : 'is-offline'}`}>
+            {isConnected ? 'Backend online' : 'Backend offline'}
+          </span>
+        </article>
+      </section>
+
       {/* Scope Toolbar & Session Switcher */}
       <div className="gateway-scope-toolbar">
         <div className="scope-select-group">
@@ -183,19 +217,65 @@ export function Gateway() {
         <div className="gateway-body">
           {displayMessages.length === 0 ? (
             <div className="gateway-empty-wrap">
-              <EmptyState
-                icon={Radio}
-                title={
-                  activeTab === 'telegram' || activeTab === 'discord'
-                    ? 'Channel Not Connected'
-                    : `No Gateway Events in ${currentChatTitle}`
-                }
-                subtitle={
-                  activeTab === 'telegram' || activeTab === 'discord'
-                    ? 'This channel adapter is planned for future integration.'
-                    : 'Send prompts in Chat to record inbound and outbound API gateway telemetry.'
-                }
-              />
+              {activeTab === 'telegram' ? (
+                <div className="channel-state-panel">
+                  <div className="channel-state-copy">
+                    <div className={`channel-state-icon ${telegramPolling ? 'is-live' : ''}`}>
+                      <Radio size={20} />
+                    </div>
+                    <div>
+                      <span className="channel-state-eyebrow">
+                        Telegram · {telegramPolling ? 'polling enabled' : 'polling disabled'}
+                      </span>
+                      <h2>{telegramPolling ? 'Telegram is listening' : 'Telegram is available but inactive'}</h2>
+                      <p>
+                        {telegramPolling
+                          ? 'The backend adapter is receiving Telegram updates. This local ledger currently shows browser and CLI events only.'
+                          : 'Add a bot token and enable Telegram polling in the local environment to start the adapter.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="channel-state-details" aria-label="Telegram adapter capabilities">
+                    <div><span>Inbound messages</span><strong>{telegramPolling ? 'Listening' : 'Paused'}</strong></div>
+                    <div><span>Outbound replies</span><strong>{telegramPolling ? 'Enabled' : 'Paused'}</strong></div>
+                    <div><span>Ledger visibility</span><strong>Not connected</strong></div>
+                  </div>
+                  <button className="gateway-action-btn secondary" onClick={() => setActiveTab('web')}>
+                    View Web / CLI traffic
+                    <ArrowUpRight size={13} />
+                  </button>
+                </div>
+              ) : activeTab === 'discord' ? (
+                <div className="channel-state-panel">
+                  <div className="channel-state-copy">
+                    <div className="channel-state-icon"><Radio size={20} /></div>
+                    <div>
+                      <span className="channel-state-eyebrow">Discord · roadmap</span>
+                      <h2>Discord is not connected</h2>
+                      <p>The adapter has not been implemented yet. No connection or event data is being simulated on this page.</p>
+                    </div>
+                  </div>
+                  <button className="gateway-action-btn secondary" onClick={() => setActiveTab('web')}>
+                    View active channel
+                    <ArrowUpRight size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="channel-state-panel compact">
+                  <div className="channel-state-copy">
+                    <div className="channel-state-icon"><MessageSquare size={20} /></div>
+                    <div>
+                      <span className="channel-state-eyebrow">No events yet</span>
+                      <h2>No traffic in {currentChatTitle}</h2>
+                      <p>Send a prompt in Chat and the inbound request and assistant response will appear here.</p>
+                    </div>
+                  </div>
+                  <button className="gateway-action-btn" onClick={() => navigate('/')}>
+                    Open Chat
+                    <ArrowUpRight size={13} />
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="gateway-table-container">

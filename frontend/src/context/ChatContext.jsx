@@ -29,6 +29,7 @@ export function ChatProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedTurn, setSelectedTurn] = useState(null);
+  const abortControllerRef = useRef(null);
   
   // Overview Drawer State (Right)
   const [isOverviewOpen, setIsOverviewOpen] = useLocalStorage('poseidon-overview-open', false);
@@ -129,6 +130,13 @@ export function ChatProvider({ children }) {
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isLoading) return;
 
+    // Abort any previous inflight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     // Ensure we have an active session
     let targetSessionId = activeSessionId;
     if (!targetSessionId || !sessions.some((s) => s.id === targetSessionId)) {
@@ -166,7 +174,7 @@ export function ChatProvider({ children }) {
     setError(null);
 
     try {
-      const data = await sendChatMessage(text.trim());
+      const data = await sendChatMessage(text.trim(), 'local_user', controller.signal);
 
       const agentMessage = {
         id: nextId(),
@@ -193,12 +201,43 @@ export function ChatProvider({ children }) {
         })
       );
     } catch (err) {
-      setError(err.message || 'Failed to send message');
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        // User clicked stop
+        const stoppedMessage = {
+          id: nextId(),
+          role: 'agent',
+          content: '⏹ *Generation stopped by user.*',
+          timestamp: new Date().toISOString(),
+        };
+
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== targetSessionId) return s;
+            return {
+              ...s,
+              updatedAt: new Date().toISOString(),
+              messages: [...s.messages, stoppedMessage],
+            };
+          })
+        );
+        return;
+      }
+
+      const isConnectionError =
+        err.message === 'Failed to fetch' ||
+        err.message?.includes('NetworkError') ||
+        err.message?.includes('Failed to connect');
+
+      const errorText = isConnectionError
+        ? 'Could not connect to the backend server. Is FastAPI running on http://127.0.0.1:8000?'
+        : err.message || 'Something went wrong.';
+
+      setError(errorText);
 
       const errorMessage = {
         id: nextId(),
         role: 'agent',
-        content: `⚠ **Error:** ${err.message || 'Something went wrong. Is the backend running?'}`,
+        content: `⚠ **Error:** ${errorText}`,
         isError: true,
         timestamp: new Date().toISOString(),
       };
@@ -214,9 +253,21 @@ export function ChatProvider({ children }) {
         })
       );
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setIsLoading(false);
     }
   }, [isLoading, activeSessionId, sessions, createNewSession, setSessions]);
+
+  // Stop active generation
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  }, []);
 
   const handleApprovalDecision = useCallback(
     async (approvalId, decision) => {
@@ -306,6 +357,7 @@ export function ChatProvider({ children }) {
     renameSession,
     clearAllHistory,
     sendMessage,
+    stopGeneration,
     clearChat,
     handleApprovalDecision,
     selectedTurn,

@@ -114,11 +114,11 @@
 }
 
 .line-event {
-  stroke: var(--accent-primary);
+  stroke: var(--border-strong);
 }
 
 .line-reply {
-  stroke: var(--teal);
+  stroke: var(--border-strong);
 }
 
 .line-bidirectional {
@@ -127,6 +127,15 @@
 
 .line-down {
   stroke: var(--border-strong);
+}
+
+.arch-line.active {
+  stroke: var(--accent-primary);
+  stroke-width: 1.75;
+}
+
+.line-reply.active {
+  stroke: var(--teal);
 }
 
 .arch-edge-label {

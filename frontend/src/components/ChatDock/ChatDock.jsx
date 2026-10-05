@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, RotateCw, PanelRight, PanelRightClose, Terminal } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Download, PanelRight, PanelRightClose, Brain, Cpu, FileText, RotateCw } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
@@ -14,18 +15,19 @@ function getGreeting() {
   return 'Good evening';
 }
 
-/**
- * Centered Developer Console Canvas view (DeepSeek Harness inspired)
- */
 export function ChatDock() {
+  const navigate = useNavigate();
   const {
     sessions,
     messages,
     isLoading,
     sendMessage,
+    stopGeneration,
     activeSessionId,
     isOverviewOpen,
     toggleOverview,
+    openOverview,
+    clearChat,
   } = useChat();
 
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'trajectory'
@@ -35,7 +37,7 @@ export function ChatDock() {
   const messageListRef = useRef(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
-  const sessionTitle = activeSession?.title || 'First prompt session';
+  const sessionTitle = activeSession?.title || 'New Chat';
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -65,131 +67,104 @@ export function ChatDock() {
 
   return (
     <div className={`chat-canvas ${isEmpty && activeView === 'chat' ? 'is-empty-hero' : ''}`}>
-      {/* Consolidated Top Status Ribbon */}
-      <div className="chat-canvas-status-ribbon">
-        {/* Left: POSEIDON // SESSION-XXXXXXXX (Mono) */}
-        <div className="status-ribbon-left">
-          <span className="ribbon-session-brand">
-            POSEIDON // {activeSessionId ? `SESSION-${activeSessionId.slice(0, 8).toUpperCase()}` : 'SESSION-LIVE'}
-          </span>
-        </div>
+      {/* Minimal Top Bar */}
+      {!isEmpty && (
+        <div className="chat-top-bar">
+          <div className="top-bar-left">
+            {messages.length > 0 && (
+              <div className="view-switcher">
+                <button
+                  type="button"
+                  className={`view-btn ${activeView === 'chat' ? 'active' : ''}`}
+                  onClick={() => setActiveView('chat')}
+                >
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  className={`view-btn ${activeView === 'trajectory' ? 'active' : ''}`}
+                  onClick={() => setActiveView('trajectory')}
+                >
+                  Trajectory
+                </button>
+              </div>
+            )}
+          </div>
 
-        {/* Center: Minimal pill toggle for [ CHAT ] and [ TRAJECTORY ] */}
-        <div className="status-ribbon-center">
-          <div className="ribbon-view-pill">
+          <span className="top-bar-title">{sessionTitle}</span>
+
+          <div className="top-bar-right">
             <button
               type="button"
-              className={`view-pill-btn ${activeView === 'chat' ? 'active' : ''}`}
-              onClick={() => setActiveView('chat')}
+              className="top-bar-icon-btn"
+              onClick={handleExportSessionLog}
+              title="Export session log"
             >
-              CHAT
+              <Download size={16} />
             </button>
             <button
               type="button"
-              className={`view-pill-btn ${activeView === 'trajectory' ? 'active' : ''}`}
-              onClick={() => setActiveView('trajectory')}
+              className={`top-bar-icon-btn ${isOverviewOpen ? 'active' : ''}`}
+              onClick={toggleOverview}
+              title={isOverviewOpen ? 'Hide inspector' : 'Show inspector'}
             >
-              TRAJECTORY
+              {isOverviewOpen ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
             </button>
           </div>
         </div>
+      )}
 
-        {/* Right: Status indicator dot with READY and quick buttons [ LOG ] [ INSPECTOR ] */}
-        <div className="status-ribbon-right">
-          <div className="ribbon-status-indicator" title="System Status: Ready">
-            <span className="ribbon-status-dot" />
-            <span className="ribbon-status-text">READY</span>
-          </div>
-
-          <button 
-            type="button"
-            className="ribbon-pill-btn"
-            onClick={handleExportSessionLog}
-            title="Export session execution log"
-          >
-            <Download size={11} />
-            <span>LOG</span>
-          </button>
-
-          <button
-            type="button"
-            className={`ribbon-pill-btn ${isOverviewOpen ? 'is-active' : ''}`}
-            onClick={toggleOverview}
-            title={isOverviewOpen ? 'Hide Inspector Panel' : 'Show Inspector Panel'}
-          >
-            {isOverviewOpen ? <PanelRightClose size={11} /> : <PanelRight size={11} />}
-            <span>INSPECTOR</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main View: Trajectory View vs Conversation Stream */}
+      {/* Main View */}
       {activeView === 'trajectory' ? (
         <div className="chat-canvas-trajectory-view animate-fade-in">
           <TrajectoryView messages={messages} sessionTitle={sessionTitle} />
         </div>
       ) : isEmpty ? (
-        /* Empty Execution Workspace Hero — Three-Layer Rule (Section 2.1) */
+        /* Clean Empty State Hero */
         <div className="chat-hero-container animate-fade-in">
-          {/* Layer 3: Top Instrument Tag (ALL CAPS Space Mono) */}
-          <div className="hero-badge">
-            <span className="hero-badge-status-dot" />
-            <span>POSEIDON // COGNITIVE COCKPIT</span>
-          </div>
+          <h1 className="hero-greeting">{greeting}</h1>
+          <p className="hero-subtitle">How can I help you today?</p>
 
-          {/* Layer 1: The ONE Thing (Section 2.1 Display Size with 48–64px breathing room) */}
-          <h1 className="hero-title font-display">POSEIDON // 01</h1>
-          <p className="hero-subtitle">
-            Autonomous agent harness with 4-tier cognitive memory and sandboxed tool execution.
-          </p>
-
-          {/* Layer 2: Supporting Context (Quick Action Pills) */}
-          <div className="hero-quick-commands">
-            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/memory')}>
-              /memory · Inspect facts
+          <div className="hero-actions">
+            <button type="button" className="hero-action-card" onClick={() => navigate('/settings?tab=memory')}>
+              <Brain size={20} />
+              <span>Inspect Memory</span>
             </button>
-            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/status')}>
-              /status · Health check
+            <button type="button" className="hero-action-card" onClick={() => openOverview('telemetry')}>
+              <Cpu size={20} />
+              <span>System Health</span>
             </button>
-            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/skills')}>
-              /skills · List playbooks
+            <button type="button" className="hero-action-card" onClick={() => navigate('/settings?tab=memory')}>
+              <FileText size={20} />
+              <span>View Skills</span>
             </button>
-            <button type="button" className="quick-command-chip" onClick={() => sendMessage('/clear')}>
-              /clear · Fresh session
+            <button type="button" className="hero-action-card" onClick={clearChat}>
+              <RotateCw size={20} />
+              <span>Fresh Session</span>
             </button>
           </div>
 
-          {/* Centered Command Input Bar */}
           <div className="hero-input-wrapper">
-            <MessageInput onSend={sendMessage} disabled={isLoading} isHero={true} />
-          </div>
-
-          {/* Layer 3: Peripheral System Metadata (Pushed to bottom) */}
-          <div className="hero-bottom-metadata nothing-label">
-            <span>[ SYSTEM: READY ]</span>
-            <span className="metadata-dot">·</span>
-            <span>[ 4-TIER COGNITION ]</span>
-            <span className="metadata-dot">·</span>
-            <span>[ SANDBOX: ACTIVE ]</span>
+            <MessageInput onSend={sendMessage} onStop={stopGeneration} disabled={isLoading} isHero={true} />
           </div>
         </div>
       ) : (
         /* Active Chat Message Stream */
         <>
-          {/* Message List */}
           <div className="chat-canvas-messages" ref={messageListRef}>
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            <div className="messages-column">
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
 
-            {isLoading && <TypingIndicator />}
+              {isLoading && <TypingIndicator />}
 
-            <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} />
+            </div>
           </div>
 
-          {/* Docked Command Input Bar */}
           <div className="chat-canvas-input-wrapper">
-            <MessageInput onSend={sendMessage} disabled={isLoading} isHero={false} />
+            <MessageInput onSend={sendMessage} onStop={stopGeneration} disabled={isLoading} isHero={false} />
           </div>
         </>
       )}

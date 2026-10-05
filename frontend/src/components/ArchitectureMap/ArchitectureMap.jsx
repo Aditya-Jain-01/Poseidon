@@ -1,7 +1,20 @@
 import React from 'react';
 import './ArchitectureMap.css';
 
-export function ArchitectureMap({ activeNodes = [] }) {
+export function ArchitectureMap({
+  activeNodes = [],
+  activePaths = [],
+  modelName = '',
+  agentName = 'poseidon',
+  toolNames = [],
+}) {
+  const isPathActive = (path) => activePaths.includes(path);
+  const displayModel = modelName ? modelName.slice(0, 34) : 'Configured model';
+  const displayAgent = `${agentName.charAt(0).toUpperCase()}${agentName.slice(1)} Agent`;
+  const displayTools = toolNames.length > 0
+    ? toolNames.join(' · ').slice(0, 42)
+    : 'No tool executed';
+
   return (
     <div className="architecture-map-container">
       <svg
@@ -19,7 +32,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             refY="4"
             orient="auto"
           >
-            <polygon points="0 1, 8 4, 0 7" fill="var(--accent)" />
+            <polygon points="0 1, 8 4, 0 7" fill="context-stroke" />
           </marker>
 
           <marker
@@ -30,7 +43,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             refY="4"
             orient="auto"
           >
-            <polygon points="0 1, 8 4, 0 7" fill="var(--teal)" />
+            <polygon points="0 1, 8 4, 0 7" fill="context-stroke" />
           </marker>
 
           <marker
@@ -41,7 +54,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             refY="4"
             orient="auto"
           >
-            <polygon points="0 1, 8 4, 0 7" fill="var(--muted-dim)" />
+            <polygon points="0 1, 8 4, 0 7" fill="context-stroke" />
           </marker>
 
           <marker
@@ -52,19 +65,9 @@ export function ArchitectureMap({ activeNodes = [] }) {
             refY="4"
             orient="auto"
           >
-            <polygon points="8 1, 0 4, 8 7" fill="var(--muted-dim)" />
+            <polygon points="8 1, 0 4, 8 7" fill="context-stroke" />
           </marker>
 
-          {/* Gradients */}
-          <linearGradient id="gatewayGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#111a30" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#0d1526" stopOpacity="0.9" />
-          </linearGradient>
-
-          <linearGradient id="harnessGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#131e38" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#0a0f1e" stopOpacity="0.7" />
-          </linearGradient>
         </defs>
 
         {/* 1. GATEWAY BOX */}
@@ -81,7 +84,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             GATEWAY
           </text>
           <text x="460" y="66" textAnchor="middle" className="arch-subtitle">
-            Web / CLI Channels → InboundEvent
+            Channels → InboundEvent
           </text>
         </g>
 
@@ -93,7 +96,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="84"
             x2="380"
             y2="128"
-            className="arch-line line-event"
+            className={`arch-line line-event ${isPathActive('gateway-harness') ? 'active' : ''}`}
             markerEnd="url(#arrowhead)"
           />
           <text x="368" y="110" textAnchor="end" className="arch-edge-label accent">
@@ -106,7 +109,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="128"
             x2="540"
             y2="88"
-            className="arch-line line-reply"
+            className={`arch-line line-reply ${isPathActive('gateway-harness') ? 'active' : ''}`}
             markerEnd="url(#arrowhead-reply)"
           />
           <text x="552" y="110" textAnchor="start" className="arch-edge-label teal">
@@ -125,7 +128,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             className="arch-rect node-harness"
           />
           <text x="144" y="156" className="arch-group-title">
-            HARNESS · EPHEMERAL AGENT RUN
+            HARNESS · WORKING MEMORY · AGENT RUN
           </text>
 
           {/* 2a. LLM Q&A Agent */}
@@ -139,10 +142,10 @@ export function ArchitectureMap({ activeNodes = [] }) {
               className="arch-rect node-inner node-agent"
             />
             <text x="265" y="206" textAnchor="middle" className="arch-title">
-              LLM Q&amp;A Agent
+              {displayAgent}
             </text>
             <text x="265" y="228" textAnchor="middle" className="arch-subtitle">
-              Single-turn Q&amp;A (Gemma)
+              {displayModel}
             </text>
             <text x="265" y="246" textAnchor="middle" className="arch-badge">
               Active Agent
@@ -155,7 +158,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="219"
             x2="476"
             y2="219"
-            className="arch-line line-bidirectional"
+            className={`arch-line line-bidirectional ${isPathActive('agent-tools') ? 'active' : ''}`}
             markerEnd="url(#arrowhead-bi)"
             markerStart="url(#arrowhead-bi-start)"
           />
@@ -174,7 +177,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
               Agentic Tools
             </text>
             <text x="625" y="222" textAnchor="middle" className="arch-subtitle">
-              calendar · notes · CRM
+              {displayTools}
             </text>
             <g className="not-registered-group">
               <text x="625" y="244" textAnchor="middle" className="arch-tool-denied">
@@ -197,7 +200,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="316"
             x2="220"
             y2="356"
-            className="arch-line line-down"
+            className={`arch-line line-down ${isPathActive('harness-procedural') ? 'active' : ''}`}
             markerEnd="url(#arrowhead)"
           />
           <line
@@ -205,7 +208,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="316"
             x2="460"
             y2="356"
-            className="arch-line line-down"
+            className={`arch-line line-down ${isPathActive('harness-semantic') ? 'active' : ''}`}
             markerEnd="url(#arrowhead)"
           />
           <line
@@ -213,7 +216,7 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="316"
             x2="700"
             y2="356"
-            className="arch-line line-down"
+            className={`arch-line line-down ${isPathActive('harness-episodic') ? 'active' : ''}`}
             markerEnd="url(#arrowhead)"
           />
         </g>
@@ -280,13 +283,13 @@ export function ArchitectureMap({ activeNodes = [] }) {
             y1="440"
             x2="460"
             y2="488"
-            className="arch-line line-down"
+            className={`arch-line line-down ${isPathActive('semantic-summarizer') ? 'active' : ''}`}
             markerEnd="url(#arrowhead)"
           />
           <path
             d="M 700 440 L 700 465 L 530 465 L 530 488"
             fill="none"
-            className="arch-line line-down"
+            className={`arch-line line-down ${isPathActive('episodic-summarizer') ? 'active' : ''}`}
             markerEnd="url(#arrowhead)"
           />
         </g>
@@ -303,10 +306,10 @@ export function ArchitectureMap({ activeNodes = [] }) {
             className="arch-rect node-ops"
           />
           <text x="220" y="522" textAnchor="middle" className="arch-title">
-            LLM OPS
+            Policy &amp; Audit
           </text>
           <text x="220" y="544" textAnchor="middle" className="arch-subtitle">
-            Trace → Eval → Gate
+            Trace · Risk · Approval
           </text>
         </g>
 

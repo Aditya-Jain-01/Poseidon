@@ -42,7 +42,7 @@ export function Overview() {
             </div>
           </div>
           <div className="telemetry-mini-card">
-            <MessageSquare size={14} className="amber" />
+            <MessageSquare size={14} className="teal" />
             <div className="telemetry-mini-info">
               <span className="mini-label">Session</span>
               <span className="mini-val">{totalMessagesCount} msgs</span>

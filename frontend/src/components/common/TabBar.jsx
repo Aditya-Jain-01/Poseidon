@@ -14,10 +14,15 @@ export function TabBar({ tabs = [], activeTab, onTabChange, className = '' }) {
             className={`common-tab-btn ${isActive ? 'active' : ''}`}
             onClick={() => onTabChange && onTabChange(tab.key)}
           >
-            <span>{tab.label}</span>
-            {tab.count !== undefined && (
-              <span className="common-tab-badge">{tab.count}</span>
+            {tab.status && (
+              <span className={`common-tab-status-dot ${tab.status}`} aria-hidden="true" />
             )}
+            <span>{tab.label}</span>
+            {tab.badge ? (
+              <span className={`common-tab-badge ${tab.badgeVariant || ''}`}>{tab.badge}</span>
+            ) : tab.count !== undefined ? (
+              <span className="common-tab-badge">{tab.count}</span>
+            ) : null}
           </button>
         );
       })}

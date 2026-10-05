@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Cpu,
   Brain,
   Shield,
-  Server,
   RefreshCw,
-  CheckCircle2,
-  AlertTriangle,
   Search,
   Zap,
   Sliders,
-  Database,
   Lock,
-  ExternalLink,
-  ChevronRight
+  Server,
+  KeyRound,
+  Activity,
 } from 'lucide-react';
 import { useAgents } from '../../context/AgentContext';
 import { useHealth } from '../../context/HealthContext';
@@ -29,41 +27,34 @@ const AVAILABLE_TOOLS = [
   { id: 'crm_read', name: 'CRM Read', tier: 'auto', desc: 'Query contacts and relationships' },
   { id: 'crm_write', name: 'CRM Write', tier: 'approval', desc: 'Create, update, or remove contacts' },
   { id: 'notes_reminders_read', name: 'Notes/Reminders Read', tier: 'auto', desc: 'Read personal notes and reminders' },
-  { id: 'notes_reminders_create', name: 'Notes/Reminders Create', tier: 'approval', desc: 'Create new notes or scheduled reminders' },
+  { id: 'notes_reminders_create', name: 'Notes/Reminders Create', tier: 'guarded', desc: 'Create new notes or scheduled reminders' },
   { id: 'notes_reminders_delete', name: 'Notes/Reminders Delete', tier: 'approval', desc: 'Delete notes or reminders' },
-  { id: 'calendar_read', name: 'Calendar Read', tier: 'auto', desc: 'Read upcoming events and schedule' },
-  { id: 'calendar_create', name: 'Calendar Create', tier: 'approval', desc: 'Book appointments and calendar items' },
   { id: 'skill_manage_read', name: 'Skill Manage Read', tier: 'auto', desc: 'Inspect procedural memory skills' },
   { id: 'skill_manage_write', name: 'Skill Manage Write', tier: 'approval', desc: 'Create procedural memory skills' },
 ];
 
-const MODEL_PRESETS = [
-  { id: 'local', label: 'Local (Ollama)', tag: '100% LOCAL', desc: 'Runs locally on Ollama. Complete data privacy.', cost: 'Free' },
-  { id: 'cloud_free', label: 'Cloud Free (Nvidia/OpenRouter)', tag: 'FREE CLOUD', desc: 'Zero-cost cloud inference via free tier APIs.', cost: 'Free' },
-  { id: 'cloud_paid', label: 'Cloud Paid (OpenAI)', tag: 'PAID TIER', desc: 'Commercial high-throughput models (GPT-4o, Claude).', cost: 'Usage' },
-  { id: 'custom', label: 'Custom Endpoint', tag: 'CUSTOM', desc: 'Any OpenAI-compatible base URL & endpoint.', cost: 'Variable' },
-];
-
 export function Settings() {
-  const { llmSettings, updateLLMProvider, checkAgentHealth, healthStatus } = useAgents();
-  const { modelName, isConnected, refreshHealth } = useHealth();
-  const [activeTab, setActiveTab] = useState('models'); // 'models' | 'memory' | 'security'
+  const [searchParams] = useSearchParams();
+  const { llmSettings, checkAgentHealth } = useAgents();
+  const { modelName, isConnected, lastChecked } = useHealth();
+  const requestedTab = searchParams.get('tab');
+  const initialTab = ['models', 'memory', 'security'].includes(requestedTab) ? requestedTab : 'models';
+  const [activeTab, setActiveTab] = useState(initialTab); // 'models' | 'memory' | 'security'
 
-  // Model Settings Form State
-  const poseidonConfig = llmSettings?.agent_overrides?.poseidon || { preset: 'cloud_free' };
-  const [selectedPreset, setSelectedPreset] = useState(poseidonConfig.preset || 'cloud_free');
-  const [ollamaUrl, setOllamaUrl] = useState(llmSettings?.providers?.local?.base_url || 'http://localhost:11434/v1');
-  const [localModel, setLocalModel] = useState(llmSettings?.providers?.local?.default_model || 'llama3.2');
-  const [isSavingLLM, setIsSavingLLM] = useState(false);
   const [isTestingLLM, setIsTestingLLM] = useState(false);
   const [llmSaveMsg, setLlmSaveMsg] = useState(null);
 
-  // Sync state when llmSettings loads
-  useEffect(() => {
-    if (llmSettings?.agent_overrides?.poseidon?.preset) {
-      setSelectedPreset(llmSettings.agent_overrides.poseidon.preset);
-    }
-  }, [llmSettings]);
+  const activeBaseUrl = llmSettings?.providers?.env?.base_url || 'https://api.groq.com/openai/v1';
+  const activeProvider = activeBaseUrl.includes('groq.com')
+    ? 'Groq'
+    : activeBaseUrl.includes('openrouter.ai')
+      ? 'OpenRouter'
+      : activeBaseUrl.includes('localhost') || activeBaseUrl.includes('127.0.0.1')
+        ? 'Local / Ollama'
+        : activeBaseUrl.includes('openai.com')
+          ? 'OpenAI'
+          : 'Custom endpoint';
+  const hasApiKey = Boolean(llmSettings?.agents?.poseidon?.has_api_key);
 
   // Memory Studio State
   const [semanticFacts, setSemanticFacts] = useState([]);
@@ -73,17 +64,10 @@ export function Settings() {
   const [isConsolidating, setIsConsolidating] = useState(false);
   const [consolidationResult, setConsolidationResult] = useState(null);
 
-  // Load Memory Studio Data
-  useEffect(() => {
-    if (activeTab === 'memory') {
-      loadMemoryData();
-    }
-  }, [activeTab]);
-
-  const loadMemoryData = async () => {
+  const loadMemoryData = useCallback(async (query = null) => {
     try {
       const [semRes, procRes, statRes] = await Promise.all([
-        fetchSemanticMemory('local_user', factQuery || null),
+        fetchSemanticMemory('local_user', query || null),
         fetchProceduralMemory(),
         fetchMemoryStatus('local_user'),
       ]);
@@ -93,30 +77,14 @@ export function Settings() {
     } catch (e) {
       console.error('Failed to load memory studio data:', e);
     }
-  };
+  }, []);
 
-  const handleSaveLLM = async () => {
-    setIsSavingLLM(true);
-    setLlmSaveMsg(null);
-    try {
-      const payload = { preset: selectedPreset };
-      if (selectedPreset === 'local') {
-        payload.model = localModel || 'llama3.2';
-        payload.base_url = ollamaUrl || 'http://localhost:11434/v1';
-      } else if (selectedPreset === 'cloud_free') {
-        payload.model = llmSettings?.providers?.cloud_free?.default_model || 'nvidia/nemotron-3-ultra-550b-a55b';
-      } else if (selectedPreset === 'cloud_paid') {
-        payload.model = llmSettings?.providers?.cloud_paid?.default_model || 'gpt-5.4-medium';
-      }
-      await updateLLMProvider('poseidon', payload);
-      setLlmSaveMsg({ type: 'success', text: `Inference preset updated to '${selectedPreset}' and saved.` });
-      refreshHealth();
-    } catch (err) {
-      setLlmSaveMsg({ type: 'error', text: err.message || 'Failed to update settings.' });
-    } finally {
-      setIsSavingLLM(false);
+  // Load Memory Studio Data
+  useEffect(() => {
+    if (activeTab === 'memory') {
+      loadMemoryData();
     }
-  };
+  }, [activeTab, loadMemoryData]);
 
   const handleTestLLM = async () => {
     setIsTestingLLM(true);
@@ -154,15 +122,17 @@ export function Settings() {
       {/* Settings Header */}
       <div className="settings-page-header">
         <div>
-          <h1 className="settings-title">Developer Console Settings</h1>
-          <p className="settings-subtitle">Manage runtime endpoints, 4-tier cognitive memory, and execution boundaries.</p>
+          <h1 className="settings-title">Runtime settings</h1>
+          <p className="settings-subtitle">Inspect the local model connection, memory system, and execution policy.</p>
         </div>
       </div>
 
       {/* Tabs Bar */}
-      <div className="settings-tabs-row">
+      <div className="settings-tabs-row" role="tablist">
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'models'}
           className={`settings-tab-btn ${activeTab === 'models' ? 'active' : ''}`}
           onClick={() => setActiveTab('models')}
         >
@@ -172,6 +142,8 @@ export function Settings() {
 
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'memory'}
           className={`settings-tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
           onClick={() => setActiveTab('memory')}
         >
@@ -181,6 +153,8 @@ export function Settings() {
 
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'security'}
           className={`settings-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
           onClick={() => setActiveTab('security')}
         >
@@ -191,69 +165,112 @@ export function Settings() {
 
       {/* Tab 1: Models & Endpoints (Pure .env Authority) */}
       {activeTab === 'models' && (
-        <div className="settings-tab-content animate-fade-in">
+        <div className="settings-tab-content animate-fade-in" role="tabpanel">
+          <section className="runtime-summary-grid" aria-label="Active runtime summary">
+            <article className="runtime-summary-item">
+              <span className="runtime-summary-icon"><Cpu size={16} /></span>
+              <div>
+                <span className="runtime-summary-label">Active model</span>
+                <strong>{modelName || 'Loading model...'}</strong>
+                <small>POSEIDON_MODEL</small>
+              </div>
+            </article>
+            <article className="runtime-summary-item">
+              <span className="runtime-summary-icon"><Server size={16} /></span>
+              <div>
+                <span className="runtime-summary-label">Provider</span>
+                <strong>{activeProvider}</strong>
+                <small>OpenAI-compatible API</small>
+              </div>
+            </article>
+            <article className="runtime-summary-item">
+              <span className={`runtime-summary-icon ${isConnected ? 'is-online' : 'is-offline'}`}>
+                <Activity size={16} />
+              </span>
+              <div>
+                <span className="runtime-summary-label">Backend</span>
+                <strong>{isConnected ? 'Online' : 'Unavailable'}</strong>
+                <small>{lastChecked ? `Checked ${lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Checking connection...'}</small>
+              </div>
+            </article>
+          </section>
+
           <div className="settings-card">
             <div className="card-header-between">
               <div>
-                <h3 className="card-heading">Active Environment Configuration</h3>
+                <h3 className="card-heading">Environment configuration</h3>
                 <p className="card-desc">
-                  Inference endpoints, credentials, and models are configured exclusively via your <code>.env</code> file.
+                  Read-only values currently loaded by the backend. Restart Poseidon after changing <code>.env</code>.
                 </p>
               </div>
-              <span className="env-authority-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: 'var(--radius-full)', background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.16)', color: '#FFFFFF', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--font-dot)' }}>
-                <Zap size={12} style={{ color: 'var(--accent-red, #D71921)' }} />
-                <span>Single Source: .env</span>
-              </span>
-            </div>
-
-            <div className="provider-form-block" style={{ marginTop: '16px' }}>
-              <div className="form-group">
-                <label>Active Model (POSEIDON_MODEL)</label>
-                <input
-                  type="text"
-                  readOnly
-                  value={modelName || 'openai/gpt-oss-120b'}
-                  className="settings-text-input font-mono"
-                  style={{ opacity: 0.9 }}
-                />
-                <span className="form-hint">Loaded directly from POSEIDON_MODEL in your project .env.</span>
-              </div>
-
-              <div className="form-group">
-                <label>Inference Base URL (POSEIDON_BASE_URL)</label>
-                <input
-                  type="text"
-                  readOnly
-                  value={llmSettings?.providers?.env?.base_url || 'https://api.groq.com/openai/v1'}
-                  className="settings-text-input font-mono"
-                  style={{ opacity: 0.9 }}
-                />
-                <span className="form-hint">Loaded from POSEIDON_BASE_URL in .env. Compatible with Groq, Ollama, OpenRouter, and OpenAI.</span>
-              </div>
-
-              <div className="form-group">
-                <label>API Key Status</label>
-                <input
-                  type="text"
-                  readOnly
-                  value="Configured in .env (OPENROUTER_API_KEY / GROQ_API_KEY)"
-                  className="settings-text-input font-mono"
-                  style={{ opacity: 0.9 }}
-                />
+              <div className="environment-header-actions">
+                <span className="env-authority-badge">
+                  <Zap size={12} className="env-authority-icon" />
+                  <span>Source: .env</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleTestLLM}
+                  disabled={isTestingLLM}
+                >
+                  <RefreshCw size={13} className={isTestingLLM ? 'animate-spin' : ''} />
+                  <span>{isTestingLLM ? 'Testing...' : 'Test connection'}</span>
+                </button>
               </div>
             </div>
 
-            {/* How to Switch Providers Card */}
-            <div className="env-quick-switch-guide" style={{ margin: '16px 0', padding: '18px', background: '#18181A', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px', fontSize: '0.78rem' }}>
-              <div style={{ fontWeight: 600, color: '#FFFFFF', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sliders size={13} style={{ color: 'var(--accent-red, #D71921)' }} />
-                <span style={{ letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>How to switch providers in .env:</span>
+            <div className="environment-values" role="list">
+              <div className="environment-value-row" role="listitem">
+                <span className="environment-value-icon"><Cpu size={15} /></span>
+                <div className="environment-value-copy">
+                  <span className="environment-value-label">POSEIDON_MODEL</span>
+                  <code>{modelName || 'openai/gpt-oss-120b'}</code>
+                </div>
+                <span className="environment-value-state">Loaded</span>
               </div>
-              <ul style={{ margin: 0, paddingLeft: '18px', color: '#D1D1D6', lineHeight: 1.7 }}>
-                <li style={{ marginBottom: '6px' }}><strong style={{ color: '#FFFFFF' }}>Groq:</strong> Set <code>POSEIDON_BASE_URL=https://api.groq.com/openai/v1</code>, <code>OPENROUTER_API_KEY=gsk_...</code>, and model like <code>llama-3.3-70b-versatile</code></li>
-                <li style={{ marginBottom: '6px' }}><strong style={{ color: '#FFFFFF' }}>Local Ollama:</strong> Set <code>POSEIDON_BASE_URL=http://localhost:11434/v1</code> and <code>POSEIDON_MODEL=llama3.2</code></li>
-                <li><strong style={{ color: '#FFFFFF' }}>OpenRouter:</strong> Set <code>POSEIDON_BASE_URL=https://openrouter.ai/api/v1</code>, <code>OPENROUTER_API_KEY=sk-or-v1-...</code>, and any model ID</li>
-              </ul>
+              <div className="environment-value-row" role="listitem">
+                <span className="environment-value-icon"><Server size={15} /></span>
+                <div className="environment-value-copy">
+                  <span className="environment-value-label">POSEIDON_BASE_URL</span>
+                  <code>{activeBaseUrl}</code>
+                </div>
+                <span className="environment-value-state">{activeProvider}</span>
+              </div>
+              <div className="environment-value-row" role="listitem">
+                <span className="environment-value-icon"><KeyRound size={15} /></span>
+                <div className="environment-value-copy">
+                  <span className="environment-value-label">Provider credential</span>
+                  <code>{hasApiKey ? 'Configured and hidden' : 'Not configured'}</code>
+                </div>
+                <span className={`environment-value-state ${hasApiKey ? '' : 'is-warning'}`}>
+                  {hasApiKey ? 'Available' : 'Missing'}
+                </span>
+              </div>
+            </div>
+
+            <div className="env-quick-switch-guide">
+              <div className="env-quick-switch-title">
+                <Sliders size={13} className="env-quick-switch-icon" />
+                <span>Provider recipes</span>
+              </div>
+              <div className="provider-recipe-grid">
+                <article className={`provider-recipe ${activeProvider === 'Groq' ? 'is-active' : ''}`}>
+                  <div><strong>Groq</strong>{activeProvider === 'Groq' && <span>Active</span>}</div>
+                  <code>https://api.groq.com/openai/v1</code>
+                  <p>Hosted, low-latency inference.</p>
+                </article>
+                <article className={`provider-recipe ${activeProvider === 'Local / Ollama' ? 'is-active' : ''}`}>
+                  <div><strong>Local Ollama</strong>{activeProvider === 'Local / Ollama' && <span>Active</span>}</div>
+                  <code>http://localhost:11434/v1</code>
+                  <p>Private inference on this machine.</p>
+                </article>
+                <article className={`provider-recipe ${activeProvider === 'OpenRouter' ? 'is-active' : ''}`}>
+                  <div><strong>OpenRouter</strong>{activeProvider === 'OpenRouter' && <span>Active</span>}</div>
+                  <code>https://openrouter.ai/api/v1</code>
+                  <p>One endpoint for multiple model providers.</p>
+                </article>
+              </div>
             </div>
 
             {llmSaveMsg && (
@@ -261,25 +278,13 @@ export function Settings() {
                 {llmSaveMsg.text}
               </div>
             )}
-
-            <div className="card-actions-row">
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleTestLLM}
-                disabled={isTestingLLM}
-              >
-                <RefreshCw size={13} className={isTestingLLM ? 'animate-spin' : ''} />
-                <span>{isTestingLLM ? 'Testing Endpoint...' : 'Test .env Connectivity'}</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
 
       {/* Tab 2: Memory Studio */}
       {activeTab === 'memory' && (
-        <div className="settings-tab-content animate-fade-in">
+        <div className="settings-tab-content animate-fade-in" role="tabpanel">
           {/* Memory Metrics Overview */}
           <div className="memory-metrics-grid">
             <div className="metric-box">
@@ -295,11 +300,11 @@ export function Settings() {
             <div className="metric-box">
               <span className="metric-label">Unconsolidated Turns</span>
               <span className="metric-val">
-                {memoryStats?.consolidation?.unconsolidated_events ?? 0}
+                {memoryStats?.consolidation?.unconsolidated_count ?? 0}
               </span>
-              <div className="segmented-progress-bar" style={{ margin: '6px 0', height: '4px', display: 'flex', gap: '2px' }}>
+              <div className="segmented-progress-bar">
                 {Array.from({ length: 8 }).map((_, idx) => {
-                  const unconsolidated = memoryStats?.consolidation?.unconsolidated_events ?? 0;
+                  const unconsolidated = memoryStats?.consolidation?.unconsolidated_count ?? 0;
                   const threshold = memoryStats?.consolidation?.threshold ?? 30;
                   const filledCount = Math.min(8, Math.round((unconsolidated / threshold) * 8));
                   const isFilled = idx < filledCount;
@@ -307,13 +312,6 @@ export function Settings() {
                     <div 
                       key={idx} 
                       className={`segmented-block ${isFilled ? 'is-filled' : ''}`}
-                      style={{
-                        flex: 1,
-                        height: '100%',
-                        borderRadius: '1px',
-                        background: isFilled ? 'var(--accent)' : 'var(--border-visible)',
-                        transition: 'background-color 0.2s ease'
-                      }}
                     />
                   );
                 })}
@@ -335,7 +333,7 @@ export function Settings() {
               </div>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-primary"
                 onClick={handleTriggerConsolidation}
                 disabled={isConsolidating}
               >
@@ -346,10 +344,15 @@ export function Settings() {
 
             {consolidationResult && (
               <div className="consolidation-result-box">
-                <span className="result-status">Status: {consolidationResult.status}</span>
-                {consolidationResult.extracted_facts?.length > 0 && (
-                  <p>Extracted {consolidationResult.extracted_facts.length} new semantic facts.</p>
+                <span className="result-status">
+                  Status: {consolidationResult.consolidated ? 'success' : (consolidationResult.status || 'not run')}
+                </span>
+                {typeof consolidationResult.facts_added === 'number' && (
+                  <p>
+                    Processed {consolidationResult.events_processed || 0} events and added {consolidationResult.facts_added} semantic facts.
+                  </p>
                 )}
+                {consolidationResult.error && <p>{consolidationResult.error}</p>}
               </div>
             )}
           </div>
@@ -364,9 +367,10 @@ export function Settings() {
                   type="text"
                   value={factQuery}
                   onChange={(e) => setFactQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && loadMemoryData()}
+                  onKeyDown={(e) => e.key === 'Enter' && loadMemoryData(factQuery)}
                   placeholder="Filter facts..."
                   className="search-input"
+                  aria-label="Filter semantic facts"
                 />
               </div>
             </div>
@@ -394,12 +398,52 @@ export function Settings() {
               )}
             </div>
           </div>
+
+          {/* Procedural Skills Table */}
+          <div className="settings-card">
+            <div className="card-header-between">
+              <div>
+                <h3 className="card-heading">Procedural Skills (*.SKILL.md)</h3>
+                <p className="card-desc">Trigger-matched playbooks loaded from local Markdown files.</p>
+              </div>
+            </div>
+
+            <div className="facts-table-wrap">
+              {proceduralSkills.length > 0 ? (
+                <table className="facts-table">
+                  <thead>
+                    <tr>
+                      <th>Skill</th>
+                      <th>Triggers</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proceduralSkills.map((skill, idx) => (
+                      <tr key={skill.name || idx}>
+                        <td className="fact-text-cell">
+                          <strong>{skill.name || 'Unnamed skill'}</strong>
+                          {skill.description && <div className="skill-description">{skill.description}</div>}
+                        </td>
+                        <td className="fact-cat-cell">
+                          {Array.isArray(skill.triggers) && skill.triggers.length > 0
+                            ? skill.triggers.join(', ')
+                            : 'No triggers'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="empty-table-state">No procedural skills found.</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Tab 3: Harness & Security */}
       {activeTab === 'security' && (
-        <div className="settings-tab-content animate-fade-in">
+        <div className="settings-tab-content animate-fade-in" role="tabpanel">
           <div className="settings-card">
             <h3 className="card-heading">Tool Execution Permissions</h3>
             <p className="card-desc">
@@ -422,7 +466,11 @@ export function Settings() {
                     <td className="tool-desc-cell">{t.desc}</td>
                     <td>
                       <span className={`tier-badge ${t.tier}`}>
-                        {t.tier === 'auto' ? 'Auto-Run (Read)' : 'Approval Required (Write)'}
+                        {t.tier === 'auto'
+                          ? 'Auto-Run (Read)'
+                          : t.tier === 'guarded'
+                            ? 'Guarded Auto-Run'
+                            : 'Approval Required (Write)'}
                       </span>
                     </td>
                     <td className="tool-guard-cell font-mono">SandboxGuard</td>
@@ -434,14 +482,14 @@ export function Settings() {
 
           <div className="security-info-grid">
             <div className="sec-info-box">
-              <Lock size={16} className="text-emerald" />
+              <Lock size={16} className="text-ocean-cyan" />
               <div>
                 <h4>DLP Output Redactor</h4>
                 <p>Scans outbound responses for API keys, bearer tokens, and credentials before replying.</p>
               </div>
             </div>
             <div className="sec-info-box">
-              <Shield size={16} className="text-amber" />
+              <Shield size={16} className="text-ocean-blue" />
               <div>
                 <h4>In-Process Sandbox</h4>
                 <p>Strict path jailing to workspace roots, 30s timeout enforcement, zero shell execution.</p>

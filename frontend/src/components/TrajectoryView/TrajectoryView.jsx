@@ -154,9 +154,28 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
           timingSource: 'Session timestamps',
         });
       } else if (msg.role === 'agent') {
+        const backendSteps = msg.runId ? (backendTrajectoryMap[msg.runId] || []) : [];
+        const inlineSteps = Array.isArray(msg.trajectory) ? msg.trajectory : [];
+        // Prefer live backend telemetry, with the response-carried trajectory
+        // as the fallback retained in local session history.
+        const runtimeSteps = backendSteps.length > 0 ? backendSteps : inlineSteps;
+        const recordedToolCalls = runtimeSteps
+          .filter((step) => step.step_type === 'tool_executed')
+          .map((step) => ({
+            name: step.tool_name || 'unknown_tool',
+            args: step.tool_args || {},
+            details: JSON.stringify(step.tool_result ?? { status: 'executed' }, null, 2),
+            status: step.tool_result?.error ? 'Failed' : 'Completed',
+            duration: step.duration_ms != null ? `${step.duration_ms} ms` : null,
+            risk: step.risk_level || 'unknown',
+          }));
+        const toolExecutions = recordedToolCalls.length > 0
+          ? recordedToolCalls
+          : (msg.toolCalls || []);
+
         // 1. Tool execution steps
-        if (msg.toolCalls && msg.toolCalls.length > 0) {
-          msg.toolCalls.forEach((tc, tIdx) => {
+        if (toolExecutions.length > 0) {
+          toolExecutions.forEach((tc, tIdx) => {
             const toolArgs = tc.args || (tc.command ? { command: tc.command } : {});
             list.push({
               id: `tool-${msg.id || idx}-${tIdx}`,
@@ -179,8 +198,8 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
               }, null, 2),
               timestamp: timeStr,
               fullIso: fullIsoStr,
-              duration: tc.duration || '18 ms',
-              timingSource: 'Harness execution telemetry',
+              duration: tc.duration || 'Not recorded',
+              timingSource: tc.duration ? 'Harness execution telemetry' : 'Execution event only',
             });
           });
         }
@@ -226,7 +245,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
             result: msg.content,
             schema: JSON.stringify({ model: msg.model || 'poseidon-runtime', run_id: msg.runId || null }, null, 2),
             runId: msg.runId,
-            backendSteps: msg.runId ? (backendTrajectoryMap[msg.runId] || []) : [],
+            backendSteps: runtimeSteps,
             timestamp: timeStr,
             fullIso: fullIsoStr,
             duration: '320 ms',
@@ -259,7 +278,9 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
 
   // Calculate real metrics
   const userTurnsCount = messages.filter((m) => m.role === 'user').length;
-  const toolCallsCount = messages.reduce((acc, m) => acc + (m.toolCalls?.length || 0), 0);
+  // Count execution attempts that reached the tool executor. Model proposals
+  // and approval requests are represented separately and are not executions.
+  const toolCallsCount = events.filter((event) => event.type === 'TOOL').length;
 
   // Compute duration from real timestamps
   const durationStr = useMemo(() => {

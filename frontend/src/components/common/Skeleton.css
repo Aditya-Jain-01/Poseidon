@@ -1,20 +1,10 @@
 .common-skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--bg-elevated) 0%,
-    var(--bg-hover) 50%,
-    var(--bg-elevated) 100%
-  );
-  background-size: 200% 100%;
-  animation: skeletonPulse 1.8s ease-in-out infinite;
+  background: var(--bg-elevated);
+  animation: skeletonPulse 1.4s ease-in-out infinite alternate;
   display: block;
 }
 
 @keyframes skeletonPulse {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  from { opacity: 0.55; }
+  to { opacity: 0.9; }
 }

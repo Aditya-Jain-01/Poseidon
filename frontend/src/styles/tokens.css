@@ -1,182 +1,249 @@
+/* ── Poseidon Grok-Inspired Ocean Design System ── */
+
 :root,
 [data-theme="dark"] {
-  /* ── Nothing Design System (OLED Dark Mode) ── */
-  --black: #000000;
-  --surface: #111111;
-  --surface-raised: #1A1A1A;
-  --border: #222222;
-  --border-visible: #333333;
-  --text-disabled: #666666;
-  --text-secondary: #999999;
-  --text-primary: #E8E8E8;
-  --text-display: #FFFFFF;
+  /* ── Semantic Color Contract (Dark) ── */
+  --color-canvas: #0A0C0F;
+  --color-sidebar: #0D0F12;
+  --color-surface-1: #111419;
+  --color-surface-2: #171B21;
+  --color-surface-3: #20252C;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.15);
+  --color-text-primary: #F3F5F7;
+  --color-text-secondary: #A5ACB7;
+  --color-text-tertiary: #6F7885;
+  --color-accent: #2F81F7;
+  --color-accent-hover: #58A6FF;
+  --color-accent-strong: #1F6FEB;
+  --color-accent-soft: rgba(47, 129, 247, 0.14);
+  --color-accent-border: rgba(88, 166, 255, 0.38);
+  --color-ocean-cyan: #38BDF8;
+  --color-success: #3DDC84;
+  --color-warning: #F59E0B;
+  --color-danger: #F85149;
+  --focus-ring: 0 0 0 3px rgba(47, 129, 247, 0.28);
 
-  /* Aliases mapped to Nothing tokens */
-  --bg-canvas: var(--black);
-  --bg-sidebar: var(--surface);
-  --bg-surface: var(--surface);
-  --bg-panel: var(--surface);
-  --bg-elevated: var(--surface-raised);
-  --bg-input: var(--surface);
-  --bg-hover: var(--surface-raised);
-  --bg-active: rgba(255, 255, 255, 0.08);
-  --bg-overlay: rgba(0, 0, 0, 0.85);
+  /* Conversational Chat Bubbles */
+  --bubble-user-bg: #eceae3;
+  --bubble-user-text: #141414;
+  --bubble-user-border: transparent;
+  --bubble-ai-bg: #171B21;
+  --bubble-ai-text: #F3F5F7;
+  --bubble-ai-border: rgba(255, 255, 255, 0.08);
 
-  --border-subtle: var(--border);
-  --border-default: var(--border);
-  --border-strong: var(--border-visible);
-  --border-focus: var(--text-display);
+  /* Semantic Compatibility Aliases */
+  --bg-canvas: var(--color-canvas);
+  --bg-sidebar: var(--color-sidebar);
+  --bg-surface: var(--color-surface-1);
+  --bg-panel: var(--color-surface-1);
+  --bg-elevated: var(--color-surface-2);
+  --bg-input: var(--color-surface-2);
+  --bg-hover: var(--color-surface-3);
+  --bg-active: var(--color-accent-soft);
+  --bg-overlay: rgba(10, 12, 15, 0.75);
 
-  --text-tertiary: var(--text-disabled);
-  --text-muted: var(--text-secondary);
+  --border-subtle: var(--color-border-subtle);
+  --border-default: var(--color-border-subtle);
+  --border-strong: var(--color-border-strong);
+  --border-focus: var(--color-accent);
 
-  /* Functional Accent Red (Section 2.5: Signal light / interrupt) */
-  --accent: #D71921;
-  --accent-red: #D71921;
-  --accent-red-glow: rgba(215, 25, 33, 0.3);
-  --accent-primary: var(--text-display);
-  --accent-hover: #D4D4D4;
-  --accent-subtle: rgba(215, 25, 33, 0.12);
-  --accent-border: var(--border-visible);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-disabled: var(--color-text-tertiary);
+  --text-display: #ffffff;
+  --text-muted: var(--color-text-secondary);
+
+  /* Poseidon Ocean Accent */
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-strong: var(--color-accent-strong);
+  --accent-subtle: var(--color-accent-soft);
+  --accent-border: var(--color-accent-border);
+  --accent-primary: var(--color-accent);
+  --accent-red: var(--color-danger);
+  --accent-red-glow: transparent;
+
+  /* Ocean Avatar Palette */
+  --avatar-teal: #06B6D4;
+  --avatar-orange: #0284C7;
+  --avatar-purple: #3B82F6;
+  --avatar-blue: #2F81F7;
+  --avatar-red: #1D4ED8;
+  --avatar-pink: #38BDF8;
 
   /* Status Colors */
-  --success: #4A9E5C;
-  --success-subtle: rgba(74, 158, 92, 0.12);
-  --success-border: rgba(74, 158, 92, 0.3);
+  --success: var(--color-success);
+  --success-subtle: rgba(61, 220, 132, 0.12);
+  --success-border: rgba(61, 220, 132, 0.3);
 
-  --warning: #D4A843;
-  --warning-subtle: rgba(212, 168, 67, 0.12);
-  --warning-border: rgba(212, 168, 67, 0.3);
+  --warning: var(--color-warning);
+  --warning-subtle: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.3);
 
-  --danger: #D71921;
-  --danger-subtle: rgba(215, 25, 33, 0.12);
-  --danger-border: rgba(215, 25, 33, 0.35);
+  --danger: var(--color-danger);
+  --danger-subtle: rgba(248, 81, 73, 0.12);
+  --danger-border: rgba(248, 81, 73, 0.3);
 
-  --teal: var(--text-display);
-  --teal-subtle: rgba(255, 255, 255, 0.06);
-  --teal-border: var(--border-visible);
-  --mono-accent: var(--text-display);
+  --teal: var(--color-ocean-cyan);
+  --teal-subtle: rgba(56, 189, 248, 0.12);
+  --teal-border: rgba(56, 189, 248, 0.3);
+  --mono-accent: var(--color-accent-hover);
 
-  /* Craft Rule 3: No shadows, no blur. Flat surfaces with border separation */
+  /* Flat surfaces: hierarchy comes from tone and borders, not glow/elevation. */
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: none;
-  --shadow-popover: 0 0 0 1px var(--border-visible);
+  --shadow-popover: none;
 
   /* Legacy Aliases */
-  --bg: var(--bg-canvas);
-  --bg-deep: var(--bg-canvas);
-  --panel: var(--bg-surface);
-  --panel-2: var(--bg-elevated);
-  --panel-hover: var(--bg-hover);
-  --line: var(--border-default);
-  --line-soft: var(--border-subtle);
-  --ink: var(--text-primary);
-  --muted: var(--text-secondary);
-  --muted-dim: var(--text-tertiary);
-  --amber: var(--warning);
+  --bg: var(--color-canvas);
+  --bg-deep: var(--color-canvas);
+  --panel: var(--color-surface-1);
+  --panel-2: var(--color-surface-2);
+  --panel-hover: var(--color-surface-3);
+  --line: var(--color-border-subtle);
+  --line-soft: var(--color-border-subtle);
+  --ink: var(--color-text-primary);
+  --muted: var(--color-text-secondary);
+  --muted-dim: var(--color-text-tertiary);
+  --amber: var(--color-warning);
 }
 
 [data-theme="light"] {
-  /* ── Nothing Design System (Printed Technical Manual Light Mode) ── */
-  --black: #F5F5F5;
-  --surface: #FFFFFF;
-  --surface-raised: #F0F0F0;
-  --border: #E8E8E8;
-  --border-visible: #CCCCCC;
-  --text-disabled: #999999;
-  --text-secondary: #666666;
-  --text-primary: #1A1A1A;
+  /* ── Semantic Color Contract (Light) ── */
+  --color-canvas: #F6F8FA;
+  --color-sidebar: #FFFFFF;
+  --color-surface-1: #FFFFFF;
+  --color-surface-2: #F0F3F6;
+  --color-surface-3: #E7EBF0;
+  --color-border-subtle: rgba(15, 23, 42, 0.10);
+  --color-border-strong: rgba(15, 23, 42, 0.18);
+  --color-text-primary: #111827;
+  --color-text-secondary: #4B5563;
+  --color-text-tertiary: #7B8491;
+  --color-accent: #0969DA;
+  --color-accent-hover: #0550AE;
+  --color-accent-strong: #0349B4;
+  --color-accent-soft: rgba(9, 105, 218, 0.10);
+  --color-accent-border: rgba(9, 105, 218, 0.28);
+  --color-ocean-cyan: #0284C7;
+  --color-success: #15803D;
+  --color-warning: #B45309;
+  --color-danger: #CF222E;
+  --focus-ring: 0 0 0 3px rgba(9, 105, 218, 0.28);
+
+  /* Conversational Chat Bubbles (Light) */
+  --bubble-user-bg: #1e1e1e;
+  --bubble-user-text: #ffffff;
+  --bubble-user-border: transparent;
+  --bubble-ai-bg: #F0F3F6;
+  --bubble-ai-text: #111827;
+  --bubble-ai-border: rgba(15, 23, 42, 0.10);
+
+  /* Semantic Compatibility Aliases (Light) */
+  --bg-canvas: var(--color-canvas);
+  --bg-sidebar: var(--color-sidebar);
+  --bg-surface: var(--color-surface-1);
+  --bg-panel: var(--color-surface-1);
+  --bg-elevated: var(--color-surface-2);
+  --bg-input: #FFFFFF;
+  --bg-hover: var(--color-surface-3);
+  --bg-active: var(--color-accent-soft);
+  --bg-overlay: rgba(246, 248, 250, 0.9);
+
+  --border-subtle: var(--color-border-subtle);
+  --border-default: var(--color-border-subtle);
+  --border-strong: var(--color-border-strong);
+  --border-focus: var(--color-accent);
+
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-disabled: var(--color-text-tertiary);
   --text-display: #000000;
+  --text-muted: var(--color-text-secondary);
 
-  --bg-canvas: var(--black);
-  --bg-sidebar: #ECECEC;
-  --bg-surface: var(--surface);
-  --bg-panel: var(--surface);
-  --bg-elevated: var(--surface-raised);
-  --bg-input: var(--surface);
-  --bg-hover: var(--surface-raised);
-  --bg-active: rgba(0, 0, 0, 0.06);
-  --bg-overlay: rgba(245, 245, 245, 0.92);
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-strong: var(--color-accent-strong);
+  --accent-subtle: var(--color-accent-soft);
+  --accent-border: var(--color-accent-border);
+  --accent-primary: var(--color-accent);
+  --accent-red: var(--color-danger);
+  --accent-red-glow: transparent;
 
-  --border-subtle: var(--border);
-  --border-default: var(--border);
-  --border-strong: var(--border-visible);
-  --border-focus: var(--text-display);
+  --avatar-teal: #0284C7;
+  --avatar-orange: #0369A1;
+  --avatar-purple: #2563EB;
+  --avatar-blue: #0969DA;
+  --avatar-red: #1E40AF;
+  --avatar-pink: #0284C7;
 
-  --text-tertiary: var(--text-disabled);
-  --text-muted: var(--text-secondary);
+  --success: var(--color-success);
+  --success-subtle: rgba(21, 128, 61, 0.08);
+  --success-border: rgba(21, 128, 61, 0.2);
 
-  --accent: #D71921;
-  --accent-red: #D71921;
-  --accent-red-glow: rgba(215, 25, 33, 0.2);
-  --accent-primary: var(--text-display);
-  --accent-hover: #222222;
-  --accent-subtle: rgba(215, 25, 33, 0.08);
-  --accent-border: var(--border-visible);
+  --warning: var(--color-warning);
+  --warning-subtle: rgba(180, 83, 9, 0.08);
+  --warning-border: rgba(180, 83, 9, 0.2);
 
-  --success: #3D8B4D;
-  --success-subtle: rgba(61, 139, 77, 0.1);
-  --success-border: rgba(61, 139, 77, 0.25);
+  --danger: var(--color-danger);
+  --danger-subtle: rgba(207, 34, 46, 0.08);
+  --danger-border: rgba(207, 34, 46, 0.2);
 
-  --warning: #B88E30;
-  --warning-subtle: rgba(184, 142, 48, 0.1);
-  --warning-border: rgba(184, 142, 48, 0.25);
-
-  --danger: #D71921;
-  --danger-subtle: rgba(215, 25, 33, 0.08);
-  --danger-border: rgba(215, 25, 33, 0.25);
-
-  --teal: var(--text-display);
-  --teal-subtle: rgba(0, 0, 0, 0.05);
-  --teal-border: var(--border-visible);
-  --mono-accent: var(--text-display);
+  --teal: var(--color-ocean-cyan);
+  --teal-subtle: rgba(2, 132, 199, 0.08);
+  --teal-border: rgba(2, 132, 199, 0.2);
+  --mono-accent: var(--color-accent-hover);
 
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: none;
-  --shadow-popover: 0 0 0 1px var(--border-visible);
+  --shadow-popover: none;
 
-  --bg: var(--bg-canvas);
-  --bg-deep: var(--bg-canvas);
-  --panel: var(--bg-surface);
-  --panel-2: var(--bg-elevated);
-  --panel-hover: var(--bg-hover);
-  --line: var(--border-default);
-  --line-soft: var(--border-subtle);
-  --ink: var(--text-primary);
-  --muted: var(--text-secondary);
-  --muted-dim: var(--text-tertiary);
-  --amber: var(--warning);
+  --bg: var(--color-canvas);
+  --bg-deep: var(--color-canvas);
+  --panel: var(--color-surface-1);
+  --panel-2: var(--color-surface-2);
+  --panel-hover: var(--color-surface-3);
+  --line: var(--color-border-subtle);
+  --line-soft: var(--color-border-subtle);
+  --ink: var(--color-text-primary);
+  --muted: var(--color-text-secondary);
+  --muted-dim: var(--color-text-tertiary);
+  --amber: var(--color-warning);
 }
 
 :root {
-  /* ── Nothing Hardware Radii (Craft Rule: Max 16px cards, 999px pills, 4px technical) ── */
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Border Radii — Consistent with Grok and plan */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --radius-card: 16px;
-  --radius-xl: 16px;
-  --radius-2xl: 16px;
-  --radius-full: 999px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
   --radius: var(--radius-card);
 
+  /* Layout */
   --topbar-height: 48px;
-  --sidebar-width: 240px;
-  --sidebar-collapsed-width: 56px;
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 64px;
   --inspector-width: 380px;
 
-  /* ── Nothing Typography Hierarchy (Space Grotesk + Space Mono + Doto) ── */
-  --font-display: 'Doto', 'Space Grotesk', sans-serif;
-  --font-sans: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-heading: 'Space Grotesk', sans-serif;
-  --font-body: 'Space Grotesk', sans-serif;
-  --font-mono: 'Space Mono', 'IBM Plex Mono', monospace;
-  --font-dot: 'Doto', 'Silkscreen', monospace;
+  /* Typography — Inter + JetBrains Mono */
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-dot: 'Inter', sans-serif;
 
-  /* ── Percussive Subtle Transitions (No spring/bounce, Section 4) ── */
-  --ease-fast: 120ms cubic-bezier(0.25, 0.1, 0.25, 1);
-  --ease-standard: 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
-  --ease-fluid: 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Smooth Transitions */
+  --ease-fast: 150ms ease-out;
+  --ease-standard: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-fluid: 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }

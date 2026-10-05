@@ -1,22 +1,22 @@
 .common-tab-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  border-bottom: 1px solid var(--border-default);
-  padding: 0 8px;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 0 12px;
   user-select: none;
-  background: var(--bg-surface);
+  background: var(--color-surface-1);
 }
 
 .common-tab-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   font-family: var(--font-sans);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -26,31 +26,70 @@
 }
 
 .common-tab-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
+  color: var(--color-text-primary);
+  background: var(--color-surface-2);
+}
+
+.common-tab-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-xs);
 }
 
 .common-tab-btn.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent-primary);
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-accent);
   font-weight: 600;
+}
+
+.common-tab-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.common-tab-status-dot.connected {
+  background: var(--color-success);
+  box-shadow: none;
+}
+
+.common-tab-status-dot.planned {
+  background: var(--color-text-tertiary);
 }
 
 .common-tab-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: var(--radius-xs);
-  font-size: 0.62rem;
+  font-size: 0.6875rem;
   font-family: var(--font-mono);
-  background: var(--bg-elevated);
-  color: var(--text-tertiary);
-  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-2);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .common-tab-btn.active .common-tab-badge {
-  background: var(--accent-subtle);
-  color: var(--accent-primary);
-  border-color: var(--accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-color: var(--color-accent-border);
+}
+
+.common-tab-badge.planned {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+  text-transform: none;
+}
+
+.common-tab-btn.active .common-tab-badge.planned {
+  background: var(--color-surface-3);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
 }

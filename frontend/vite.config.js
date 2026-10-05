@@ -7,14 +7,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/chat': 'http://localhost:8000',
-      '/health': 'http://localhost:8000',
-      '/memory': 'http://localhost:8000',
-      '/runs': 'http://localhost:8000',
-      '/agents': 'http://localhost:8000',
-      '/settings': 'http://localhost:8000',
+      '/chat': 'http://127.0.0.1:8000',
+      '/health': 'http://127.0.0.1:8000',
+      '/memory': 'http://127.0.0.1:8000',
+      '/runs': 'http://127.0.0.1:8000',
+      '/agents': 'http://127.0.0.1:8000',
+      '/settings': 'http://127.0.0.1:8000',
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: 'ws://127.0.0.1:8000',
         ws: true,
       },
     },

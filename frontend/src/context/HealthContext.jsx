@@ -11,6 +11,7 @@ const POLL_INTERVAL_MS = 30000; // 30 seconds
 export function HealthProvider({ children }) {
   const [isConnected, setIsConnected] = useState(false);
   const [modelName, setModelName] = useState(null);
+  const [telegramPolling, setTelegramPolling] = useState(false);
   const [lastChecked, setLastChecked] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,13 +22,16 @@ export function HealthProvider({ children }) {
       if (data && (data.status === 'ok' || data.status === 'healthy' || data.model)) {
         setIsConnected(true);
         setModelName(data.model || 'Unknown Model');
+        setTelegramPolling(Boolean(data.telegram_polling));
         setError(null);
       } else {
         setIsConnected(false);
+        setTelegramPolling(false);
         setError('Invalid response from backend');
       }
     } catch (err) {
       setIsConnected(false);
+      setTelegramPolling(false);
       setError(err.message || 'Backend unreachable');
     } finally {
       setIsLoading(false);
@@ -48,6 +52,7 @@ export function HealthProvider({ children }) {
   const value = {
     isConnected,
     modelName,
+    telegramPolling,
     lastChecked,
     error,
     isLoading,
