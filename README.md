@@ -105,7 +105,7 @@ Poseidon/
 
 ## Requirements
 
-- Python 3.10 or newer
+- Python 3.11 or newer (the Person 1 environment snapshot targets Python 3.14)
 - Node.js `^20.19.0` or `>=22.12.0` (required by the installed Vite version)
 - npm
 
@@ -144,7 +144,7 @@ POSEIDON_API_KEY=replace-me
 PowerShell, from the repository root:
 
 ```powershell
-py -3.11 -m venv .venv
+py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r backend\requirements.txt
 python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
@@ -224,7 +224,7 @@ The effective model and provider are visible through `GET /health` and in the fr
 | `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated Telegram sender IDs |
 | `TELEGRAM_WEBHOOK_SECRET` | empty | Optional webhook secret-token check |
 
-For safety, explicitly set `TELEGRAM_ALLOWED_USER_IDS` before enabling Telegram. In the current implementation, an empty allowlist accepts any Telegram sender who can reach the bot.
+Set `TELEGRAM_ALLOWED_USER_IDS` before enabling Telegram. An empty allowlist rejects all senders; verified senders map to the internal `local_owner`.
 
 ## API overview
 
@@ -249,6 +249,7 @@ Example chat request:
 ```powershell
 $body = @{
   text = "Remember that I prefer concise answers."
+  thread_id = "example-session"
   user_id = "local_user"
   channel = "web"
 } | ConvertTo-Json
@@ -298,19 +299,19 @@ Tests should use temporary databases and storage paths. Do not point destructive
 
 These are current implementation facts, not future promises:
 
-- The HTTP APIs do not authenticate callers. Request bodies and query parameters can select `user_id`; do not expose the backend to an untrusted network.
+- Operator APIs use loopback trust in local mode and require `Authorization: Bearer <POSEIDON_API_TOKEN>` for remote requests. Request body/query identity is ignored. Non-loopback configuration requires a token and explicit `POSEIDON_CORS_ORIGINS` (a JSON array).
 - Notes, reminders, CRM contacts, calendar records, and procedural skills are shared local stores rather than fully user-scoped repositories.
-- LangGraph is compiled without a durable checkpointer. Working memory, pending approvals, and execution trajectories are lost on process restart.
-- The graph executes only the first tool call from a model response containing multiple tool calls.
+- M0-M2 durability code is written, but its milestone checkpoints have not been signed off. SQLite checkpointing requires `langgraph-checkpoint-sqlite` and `aiosqlite`; the actual restart test and clean environment install remain unverified. Execution trajectories still use process memory.
+- The M2 graph queues tool calls in order and uses native approval interrupts. Its regression tests are written but have not completed execution in this session.
 - The taint/risk analyzer exists, but graph routing currently uses the registry's static tool tier rather than one unified taint-aware policy decision.
 - `SandboxGuard` cannot safely isolate untrusted Python or third-party plugin code.
 - DLP and prompt-risk detection are deterministic pattern-based safeguards, not comprehensive data-loss or prompt-injection prevention.
 - MCP registration infrastructure exists, but external server lifecycle/discovery is not a complete general-purpose MCP client runtime.
-- Telegram polling state and update deduplication are not durable across restarts. An empty Telegram allowlist is permissive.
-- CORS currently allows all origins, which is suitable only for local development.
+- Telegram polling state and update deduplication are not durable across restarts.
+- CORS uses an explicit origin list; wildcard origins are rejected at startup.
 - The semantic `MEMORY.md` mirror is a single generated file and can be overwritten when different user IDs are consolidated.
 
-The active backend hardening plan is in `docs/superpowers/plans/2026-10-02-backend-audit-remediation-plan.md`. Its planned capabilities should not be described as implemented until their acceptance tests pass.
+The canonical hardening plan is [finalplan.md](docs/superpowers/plans/finalplan.md); the [Person 1 implementation record](docs/superpowers/plans/finalplan-person-1.md#person-1-implementation-record-2026-10-13) documents current verification gaps. Its planned capabilities should not be described as implemented until their acceptance tests pass.
 
 ## Design intent
 
