@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.soul import soul_store
 from app.llm_providers import llm_provider
@@ -46,7 +46,8 @@ class UpdateLLMRequest(BaseModel):
     """Payload for updating an agent's LLM provider assignment."""
     preset: str | None = None
     base_url: str | None = None
-    api_key: str | None = None
+    model_config = ConfigDict(extra="forbid")
+    api_key_env: str | None = None
     model: str | None = None
 
 
@@ -127,13 +128,16 @@ async def update_llm_settings(agent_id: str, req: UpdateLLMRequest) -> dict[str,
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found.")
 
-    result = llm_provider.update_provider(
-        agent_id=agent_id,
-        preset=req.preset,
-        base_url=req.base_url,
-        api_key=req.api_key,
-        model=req.model,
-    )
+    try:
+        result = llm_provider.update_provider(
+            agent_id=agent_id,
+            preset=req.preset,
+            base_url=req.base_url,
+            api_key_env=req.api_key_env,
+            model=req.model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     return result
 
 

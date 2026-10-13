@@ -19,6 +19,9 @@ class Settings(BaseSettings):
 
     poseidon_host: str = Field("127.0.0.1")
     poseidon_port: int = Field(8000)
+    poseidon_api_token: str = Field(default='', repr=False)
+    poseidon_cors_origins: list[str] = Field(default_factory=lambda: ['http://127.0.0.1:5173', 'http://localhost:5173'])
+    poseidon_approval_timeout_seconds: int = Field(default=3600, ge=1)
 
     poseidon_max_iterations: int = Field(5)
     poseidon_max_tool_calls: int = Field(5)

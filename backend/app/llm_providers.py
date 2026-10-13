@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import re
+from urllib.parse import urlsplit
+from app.security.secrets import redact
 from pathlib import Path
 from typing import Any
 from openai import AsyncOpenAI
@@ -18,7 +22,6 @@ from app.config import settings
 DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
     "local": {
         "base_url": "http://localhost:11434/v1",
-        "api_key": "ollama",
         "default_model": "llama3.2",
     },
     "cloud_free": {
@@ -33,7 +36,6 @@ DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
     },
     "custom": {
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "api_key": "",
         "default_model": "nvidia/nemotron-3-ultra-550b-a55b",
     },
 }
@@ -95,11 +97,27 @@ class LLMProvider:
             try:
                 raw = json.loads(self._config_path.read_text(encoding="utf-8"))
                 if "providers" in raw and isinstance(raw["providers"], dict):
-                    self._providers.update(raw["providers"])
+                    self._providers.update({k: self._safe_override(v, provider=True) for k, v in raw["providers"].items()})
                 if "agent_overrides" in raw and isinstance(raw["agent_overrides"], dict):
-                    self._agent_overrides.update(raw["agent_overrides"])
+                    self._agent_overrides.update({k: self._safe_override(v) for k, v in raw["agent_overrides"].items()})
             except Exception as e:
-                print(f"[LLMProvider] Error reading {self._config_path}: {e}. Falling back to defaults.")
+                print("[LLMProvider] Invalid provider configuration; falling back to defaults.")
+
+    @staticmethod
+    def _safe_override(value, provider=False):
+        allowed = {'base_url', 'default_model', 'api_key_env'} if provider else {'preset', 'base_url', 'model', 'api_key_env'}
+        safe = {k: v for k, v in value.items() if k in allowed}
+        if safe.get('base_url'):
+            parts = urlsplit(safe['base_url'])
+            if parts.scheme not in {'http', 'https'} or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
+                raise ValueError('Provider URL must be http(s) without credentials or query parameters')
+        if safe.get('api_key_env') and not re.fullmatch(r'[A-Z][A-Z0-9_]*', safe['api_key_env']):
+            raise ValueError('Invalid credential environment reference')
+        return safe
+
+    def get_agent_resolved_config(self, agent_id='poseidon'):
+        """Public configuration; resolved credentials stay inside the client boundary."""
+        return redact({k: v for k, v in self._resolve_runtime_config(agent_id).items() if k != 'api_key'})
 
     def save_config(self) -> None:
         """Write current LLM configuration to disk."""
@@ -107,14 +125,14 @@ class LLMProvider:
             if hasattr(self, "_config_path") and self._config_path:
                 self._config_path.parent.mkdir(parents=True, exist_ok=True)
                 payload = {
-                    "providers": self._providers,
-                    "agent_overrides": self._agent_overrides,
+                    "providers": {k: self._safe_override(v, provider=True) for k, v in self._providers.items()},
+                    "agent_overrides": {k: self._safe_override(v) for k, v in self._agent_overrides.items()},
                 }
                 self._config_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as e:
-            print(f"[LLMProvider] Error saving {self._config_path}: {e}")
+            raise RuntimeError("Unable to save provider configuration") from None
 
-    def get_agent_resolved_config(self, agent_id: str = "poseidon") -> dict[str, Any]:
+    def _resolve_runtime_config(self, agent_id: str = "poseidon") -> dict[str, Any]:
         """Resolve full connection parameters for an agent from .env or overrides."""
         aid = agent_id.lower()
         override = self._agent_overrides.get(aid, {})
@@ -133,6 +151,7 @@ class LLMProvider:
             or provider_def.get("base_url")
             or settings.poseidon_base_url
         ).rstrip("/")
+        self._safe_override({'base_url': base_url})
 
         model = (
             override.get("model")
@@ -140,16 +159,11 @@ class LLMProvider:
             or settings.poseidon_model
         )
 
-        api_key = override.get("api_key")
-        if not api_key:
-            env_var = provider_def.get("api_key_env", "")
-            if env_var:
-                api_key = self._get_api_key(env_var)
-            else:
-                api_key = provider_def.get("api_key") or self._get_api_key()
+        credential_ref = override.get('api_key_env') or provider_def.get('api_key_env')
+        api_key = self._get_api_key(credential_ref)
 
-        if preset == "local" or "localhost" in base_url or "11434" in base_url:
-            api_key = api_key or "ollama"
+        if preset == 'local' or urlsplit(base_url).hostname in {'localhost', '127.0.0.1', '::1'}:
+            api_key = self._get_api_key(credential_ref) if credential_ref else 'ollama'
 
         return {
             "agent_id": aid,
@@ -162,8 +176,8 @@ class LLMProvider:
 
     def get_client(self, agent_id: str = "poseidon") -> AsyncOpenAI:
         """Get or initialize an AsyncOpenAI client configured from .env."""
-        conf = self.get_agent_resolved_config(agent_id)
-        cache_key = f"{conf['base_url']}::{conf['api_key']}"
+        conf = self._resolve_runtime_config(agent_id)
+        cache_key = hashlib.sha256(f"{conf['base_url']}::{conf['api_key']}".encode()).hexdigest()
 
         if cache_key not in self._clients:
             self._clients[cache_key] = AsyncOpenAI(
@@ -185,9 +199,15 @@ class LLMProvider:
         base_url: str | None = None,
         api_key: str | None = None,
         model: str | None = None,
+        api_key_env: str | None = None,
     ) -> dict[str, Any]:
         """Update provider assignment and overrides for an agent."""
+        if api_key is not None:
+            raise ValueError('Provider keys belong in environment variables; use api_key_env')
         aid = agent_id.lower()
+        candidate = dict(self._agent_overrides.get(aid, {}))
+        candidate.update({k: v for k, v in {'preset': preset, 'base_url': base_url, 'model': model, 'api_key_env': api_key_env}.items() if v is not None})
+        self._safe_override(candidate)
         if aid not in self._agent_overrides:
             self._agent_overrides[aid] = {}
 
@@ -195,12 +215,13 @@ class LLMProvider:
             self._agent_overrides[aid]["preset"] = preset
         if base_url is not None:
             self._agent_overrides[aid]["base_url"] = base_url.rstrip("/")
-        if api_key is not None:
-            self._agent_overrides[aid]["api_key"] = api_key
+        if api_key_env is not None:
+            self._agent_overrides[aid]["api_key_env"] = api_key_env
         if model is not None:
             self._agent_overrides[aid]["model"] = model
 
         self.save_config()
+        self._clients.clear()
         return self.get_agent_resolved_config(aid)
 
     async def check_availability(self, agent_id: str = "poseidon") -> dict[str, Any]:
@@ -221,7 +242,7 @@ class LLMProvider:
                 "message": f"Successfully connected to endpoint ({conf['model']})",
             }
         except Exception as e:
-            err_msg = str(e)
+            err_msg = redact(str(e))
             if "Connection refused" in err_msg or "Cannot connect" in err_msg or "All connection attempts failed" in err_msg:
                 detail = f"Cannot reach endpoint at {conf['base_url']}. Verify network or local runner."
             elif "401" in err_msg or "Unauthorized" in err_msg or "Invalid API Key" in err_msg:
@@ -267,13 +288,13 @@ class LLMProvider:
                 "default_model": conf["model"],
             }
         }
-        providers_dict.update(self._providers)
+        providers_dict.update({k: self._safe_override(v, provider=True) for k, v in self._providers.items()})
 
-        return {
+        return redact({
             "providers": providers_dict,
-            "agent_overrides": self._agent_overrides,
+            "agent_overrides": {k: self._safe_override(v) for k, v in self._agent_overrides.items()},
             "agents": agents_data,
-        }
+        })
 
 
 llm_provider = LLMProvider()
