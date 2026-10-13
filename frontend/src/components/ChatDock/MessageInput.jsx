@@ -26,7 +26,7 @@ const SLASH_COMMANDS = [
  */
 export function MessageInput({ onSend, onStop, disabled = false, isHero = false }) {
   const navigate = useNavigate();
-  const { clearChat, openOverview } = useChat();
+  const { clearChat, openOverview, setError } = useChat();
 
   const [value, setValue] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
@@ -56,7 +56,7 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
     } else if (cmdObj.cmd === '/status') {
       openOverview('telemetry');
     } else if (cmdObj.cmd === '/model') {
-      navigate('/settings');
+      navigate('/settings?tab=models');
     } else {
       onSend(cmdObj.cmd);
     }
@@ -78,10 +78,29 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
       return;
     }
 
-    if (!value.trim()) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
 
-    if (value.trim() === '/clear') {
+    if (trimmed === '/clear') {
       executeCommand(SLASH_COMMANDS[1]);
+      return;
+    }
+
+    if (trimmed === '/memory' || trimmed === '/skills') {
+      openOverview('turn');
+      setValue('');
+      return;
+    }
+
+    if (trimmed === '/status') {
+      openOverview('telemetry');
+      setValue('');
+      return;
+    }
+
+    if (trimmed === '/model') {
+      navigate('/settings?tab=models');
+      setValue('');
       return;
     }
 
@@ -90,7 +109,16 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
       return;
     }
 
-    onSend(value);
+    // Unrecognized slash command (e.g. /foobar)
+    if (trimmed.startsWith('/') && !trimmed.startsWith('/agent ') && !trimmed.includes(' ')) {
+      if (setError) {
+        setError(`Unknown command "${trimmed}". Available commands: /clear, /memory, /skills, /status, /model, /agent <name>`);
+      }
+      setValue('');
+      return;
+    }
+
+    onSend(trimmed);
     setValue('');
 
     requestAnimationFrame(() => {

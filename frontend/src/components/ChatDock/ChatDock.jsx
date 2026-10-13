@@ -154,7 +154,7 @@ export function ChatDock() {
           <div className="chat-canvas-messages" ref={messageListRef}>
             <div className="messages-column">
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
+                <MessageBubble key={msg.id} message={msg} sessionId={activeSessionId} />
               ))}
 
               {isLoading && <TypingIndicator />}

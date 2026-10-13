@@ -13,11 +13,9 @@ import {
   Sun,
   Moon,
   MessageSquare,
-  Users,
   Bot
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
-import { useHealth } from '../../context/HealthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useAgents } from '../../context/AgentContext';
 import lightLogo from '../../assets/light.png';

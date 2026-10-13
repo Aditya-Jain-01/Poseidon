@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ShieldAlert, CheckCircle, XCircle, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, CheckCircle, XCircle, ChevronDown, ChevronUp, ArrowRight, Loader2, Clock } from 'lucide-react';
 import './ApprovalCard.css';
 
 /**
@@ -7,7 +7,8 @@ import './ApprovalCard.css';
  * 1. Visual risk level badges (High / Medium / Low).
  * 2. Tainted context warning banner when invoked from untrusted origins.
  * 3. Parameter diffing with red-highlighted dangerous / modified fields.
- * 4. Approve / Deny action controls.
+ * 4. Accurate status states: pending, submitting, approved, denied, expired, failed.
+ * 5. Server-confirmed decisions: no premature optimistic marking.
  */
 export function ApprovalCard({
   approvalId,
@@ -18,20 +19,28 @@ export function ApprovalCard({
   warnings = [],
   riskLevel = 'medium', // 'high' | 'medium' | 'low'
   isTainted = false,
+  status = 'pending', // 'pending' | 'submitting' | 'approved' | 'denied' | 'expired' | 'failed'
+  errorMessage = null,
   onApprove,
   onDeny,
 }) {
   const [expanded, setExpanded] = useState(true);
-  const [decided, setDecided] = useState(null); // 'approved' | 'denied' | null
+
+  const isSubmitting = status === 'submitting';
+  const isTerminal = status === 'approved' || status === 'denied';
+  const isExpired = status === 'expired';
+  const isFailed = status === 'failed';
 
   const handleApprove = () => {
-    setDecided('approved');
-    if (onApprove) onApprove(approvalId);
+    if (!isSubmitting && !isTerminal && onApprove) {
+      onApprove(approvalId);
+    }
   };
 
   const handleDeny = () => {
-    setDecided('denied');
-    if (onDeny) onDeny(approvalId);
+    if (!isSubmitting && !isTerminal && onDeny) {
+      onDeny(approvalId);
+    }
   };
 
   const dangerousParamKeys = new Set(dangerousParams.map((p) => (typeof p === 'string' ? p : p.param)));
@@ -137,11 +146,34 @@ export function ApprovalCard({
 
       {/* Decision Footer */}
       <div className="approval-footer">
-        {decided === null ? (
+        {isFailed && errorMessage && (
+          <div className="approval-failure-alert">
+            <AlertTriangle size={14} />
+            <span>Submission failed: {errorMessage}. You can retry or deny below.</span>
+          </div>
+        )}
+
+        {status === 'approved' ? (
+          <div className="decision-status status-approved">
+            <CheckCircle size={16} />
+            <span>Action Approved by Operator</span>
+          </div>
+        ) : status === 'denied' ? (
+          <div className="decision-status status-denied">
+            <XCircle size={16} />
+            <span>Action Denied &amp; Blocked</span>
+          </div>
+        ) : isExpired ? (
+          <div className="decision-status status-expired">
+            <Clock size={16} />
+            <span>Approval Expired or Unavailable</span>
+          </div>
+        ) : (
           <div className="approval-actions">
             <button
               type="button"
               className="btn-deny"
+              disabled={isSubmitting}
               onClick={handleDeny}
             >
               <XCircle size={15} />
@@ -150,25 +182,21 @@ export function ApprovalCard({
             <button
               type="button"
               className="btn-approve"
+              disabled={isSubmitting}
               onClick={handleApprove}
             >
-              <CheckCircle size={15} />
-              <span>Approve Action</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={15} />
+                  <span>{isFailed ? 'Retry Approve' : 'Approve Action'}</span>
+                </>
+              )}
             </button>
-          </div>
-        ) : (
-          <div className={`decision-status status-${decided}`}>
-            {decided === 'approved' ? (
-              <>
-                <CheckCircle size={16} />
-                <span>Action Approved by Operator</span>
-              </>
-            ) : (
-              <>
-                <XCircle size={16} />
-                <span>Action Denied & Blocked</span>
-              </>
-            )}
           </div>
         )}
       </div>

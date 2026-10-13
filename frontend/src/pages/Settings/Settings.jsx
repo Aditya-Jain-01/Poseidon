@@ -12,6 +12,8 @@ import {
   Server,
   KeyRound,
   Activity,
+  AlertTriangle,
+  Database,
 } from 'lucide-react';
 import { useAgents } from '../../context/AgentContext';
 import { useHealth } from '../../context/HealthContext';
@@ -36,7 +38,7 @@ const AVAILABLE_TOOLS = [
 export function Settings() {
   const [searchParams] = useSearchParams();
   const { llmSettings, checkAgentHealth } = useAgents();
-  const { modelName, isConnected, lastChecked } = useHealth();
+  const { modelName, isConnected, lastChecked, capabilities } = useHealth();
   const requestedTab = searchParams.get('tab');
   const initialTab = ['models', 'memory', 'security'].includes(requestedTab) ? requestedTab : 'models';
   const [activeTab, setActiveTab] = useState(initialTab); // 'models' | 'memory' | 'security'
@@ -61,6 +63,7 @@ export function Settings() {
   const [proceduralSkills, setProceduralSkills] = useState([]);
   const [memoryStats, setMemoryStats] = useState(null);
   const [factQuery, setFactQuery] = useState('');
+  const [memoryError, setMemoryError] = useState(null);
   const [isConsolidating, setIsConsolidating] = useState(false);
   const [consolidationResult, setConsolidationResult] = useState(null);
 
@@ -74,17 +77,40 @@ export function Settings() {
       setSemanticFacts(semRes?.facts || []);
       setProceduralSkills(procRes?.skills || []);
       setMemoryStats(statRes);
+      setMemoryError(null);
     } catch (e) {
+      setMemoryError(e.message || 'Failed to load memory studio data');
       console.error('Failed to load memory studio data:', e);
     }
   }, []);
 
-  // Load Memory Studio Data
+  // Load Memory Studio Data asynchronously without synchronous setState in effect
   useEffect(() => {
+    let ignore = false;
     if (activeTab === 'memory') {
-      loadMemoryData();
+      Promise.all([
+        fetchSemanticMemory('local_user'),
+        fetchProceduralMemory(),
+        fetchMemoryStatus('local_user'),
+      ])
+        .then(([semRes, procRes, statRes]) => {
+          if (!ignore) {
+            setSemanticFacts(semRes?.facts || []);
+            setProceduralSkills(procRes?.skills || []);
+            setMemoryStats(statRes);
+            setMemoryError(null);
+          }
+        })
+        .catch((e) => {
+          if (!ignore) {
+            setMemoryError(e.message || 'Failed to load memory studio data');
+          }
+        });
     }
-  }, [activeTab, loadMemoryData]);
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab]);
 
   const handleTestLLM = async () => {
     setIsTestingLLM(true);
@@ -117,56 +143,55 @@ export function Settings() {
     }
   };
 
+  const vectorModeDesc = capabilities?.vector_mode === 'sqlite-vec'
+    ? 'sqlite-vec (Native KNN vector extension)'
+    : 'python-cosine (Fallback cosine similarity in memory)';
+
   return (
-    <div className="settings-page-root animate-fade-in">
-      {/* Settings Header */}
-      <div className="settings-page-header">
-        <div>
-          <h1 className="settings-title">Runtime settings</h1>
-          <p className="settings-subtitle">Inspect the local model connection, memory system, and execution policy.</p>
-        </div>
+    <div className="settings-page animate-fade-in">
+      <div className="settings-header">
+        <h1 className="settings-title">Settings &amp; Preferences</h1>
+        <p className="settings-subtitle">Manage model routing, local memory tiers, and security boundaries.</p>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="settings-tabs-row" role="tablist">
+      {/* Tabs */}
+      <div className="settings-tabs" role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'models'}
-          className={`settings-tab-btn ${activeTab === 'models' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'models' ? 'active' : ''}`}
           onClick={() => setActiveTab('models')}
         >
-          <Cpu size={14} />
-          <span>Models &amp; Endpoints</span>
+          <Cpu size={16} />
+          <span>Models &amp; Inference</span>
         </button>
-
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'memory'}
-          className={`settings-tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
           onClick={() => setActiveTab('memory')}
         >
-          <Brain size={14} />
+          <Brain size={16} />
           <span>Memory Studio</span>
         </button>
-
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'security'}
-          className={`settings-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'security' ? 'active' : ''}`}
           onClick={() => setActiveTab('security')}
         >
-          <Shield size={14} />
+          <Shield size={16} />
           <span>Harness &amp; Security</span>
         </button>
       </div>
 
-      {/* Tab 1: Models & Endpoints (Pure .env Authority) */}
+      {/* Tab 1: Models & Inference */}
       {activeTab === 'models' && (
         <div className="settings-tab-content animate-fade-in" role="tabpanel">
-          <section className="runtime-summary-grid" aria-label="Active runtime summary">
+          <section className="runtime-summary" aria-label="Runtime configuration summary">
             <article className="runtime-summary-item">
               <span className="runtime-summary-icon"><Cpu size={16} /></span>
               <div>
@@ -191,6 +216,14 @@ export function Settings() {
                 <span className="runtime-summary-label">Backend</span>
                 <strong>{isConnected ? 'Online' : 'Unavailable'}</strong>
                 <small>{lastChecked ? `Checked ${lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Checking connection...'}</small>
+              </div>
+            </article>
+            <article className="runtime-summary-item">
+              <span className="runtime-summary-icon"><Database size={16} /></span>
+              <div>
+                <span className="runtime-summary-label">Vector Retrieval</span>
+                <strong>{capabilities?.vector_mode || 'python-cosine'}</strong>
+                <small>{capabilities?.vector_mode === 'sqlite-vec' ? 'Native sqlite-vec' : 'Fallback python-cosine'}</small>
               </div>
             </article>
           </section>
@@ -247,6 +280,14 @@ export function Settings() {
                   {hasApiKey ? 'Available' : 'Missing'}
                 </span>
               </div>
+              <div className="environment-value-row" role="listitem">
+                <span className="environment-value-icon"><Database size={15} /></span>
+                <div className="environment-value-copy">
+                  <span className="environment-value-label">Runtime Capabilities</span>
+                  <code>{capabilities?.python ? `Python ${capabilities.python}` : 'Python runtime'} · WAL={capabilities?.wal ? 'on' : 'off'} · FTS5={capabilities?.fts5 ? 'on' : 'off'}</code>
+                </div>
+                <span className="environment-value-state">{capabilities?.vector_mode || 'python-cosine'}</span>
+              </div>
             </div>
 
             <div className="env-quick-switch-guide">
@@ -285,6 +326,13 @@ export function Settings() {
       {/* Tab 2: Memory Studio */}
       {activeTab === 'memory' && (
         <div className="settings-tab-content animate-fade-in" role="tabpanel">
+          {memoryError && (
+            <div className="settings-alert-msg error" style={{ marginBottom: '14px' }}>
+              <AlertTriangle size={14} />
+              <span>{memoryError}</span>
+            </div>
+          )}
+
           {/* Memory Metrics Overview */}
           <div className="memory-metrics-grid">
             <div className="metric-box">
@@ -296,6 +344,11 @@ export function Settings() {
               <span className="metric-label">Procedural Skills</span>
               <span className="metric-val">{memoryStats?.procedural_skills_count ?? '—'}</span>
               <span className="metric-sub">Flat *.SKILL.md playbooks</span>
+            </div>
+            <div className="metric-box">
+              <span className="metric-label">Vector Retrieval Mode</span>
+              <span className="metric-val" style={{ fontSize: '15px' }}>{capabilities?.vector_mode || 'python-cosine'}</span>
+              <span className="metric-sub">{vectorModeDesc}</span>
             </div>
             <div className="metric-box">
               <span className="metric-label">Unconsolidated Turns</span>
@@ -343,34 +396,46 @@ export function Settings() {
             </div>
 
             {consolidationResult && (
-              <div className="consolidation-result-box">
+              <div className="consolidation-result-box" style={{
+                background: consolidationResult.status === 'failed' || consolidationResult.error ? 'var(--accent-subtle)' : undefined,
+                color: consolidationResult.status === 'failed' || consolidationResult.error ? 'var(--accent)' : undefined,
+                border: consolidationResult.status === 'failed' || consolidationResult.error ? '1px solid var(--accent)' : undefined,
+              }}>
                 <span className="result-status">
-                  Status: {consolidationResult.consolidated ? 'success' : (consolidationResult.status || 'not run')}
+                  Status: {consolidationResult.status || (consolidationResult.consolidated ? 'success' : 'completed')}
                 </span>
-                {typeof consolidationResult.facts_added === 'number' && (
-                  <p>
-                    Processed {consolidationResult.events_processed || 0} events and added {consolidationResult.facts_added} semantic facts.
-                  </p>
+                {consolidationResult.error && (
+                  <div style={{ marginTop: '4px', fontSize: '11px' }}>
+                    Error: {consolidationResult.error}
+                  </div>
                 )}
-                {consolidationResult.error && <p>{consolidationResult.error}</p>}
+                {typeof consolidationResult.facts_added === 'number' && (
+                  <span className="result-added">
+                    +{consolidationResult.facts_added} new facts distilled
+                  </span>
+                )}
               </div>
             )}
           </div>
 
-          {/* Semantic Facts Table */}
+          {/* Semantic Facts Browser */}
           <div className="settings-card">
             <div className="card-header-between">
-              <h3 className="card-heading">Semantic Facts (MEMORY.md)</h3>
+              <div>
+                <h3 className="card-heading">Semantic Facts Repository</h3>
+                <p className="card-desc">FTS5-indexed declarative facts injected dynamically into agent prompts.</p>
+              </div>
               <div className="search-wrap">
-                <Search size={13} className="search-icon" />
+                <Search size={14} className="search-icon" />
                 <input
                   type="text"
+                  placeholder="Search semantic facts..."
                   value={factQuery}
-                  onChange={(e) => setFactQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && loadMemoryData(factQuery)}
-                  placeholder="Filter facts..."
-                  className="search-input"
-                  aria-label="Filter semantic facts"
+                  onChange={(e) => {
+                    setFactQuery(e.target.value);
+                    loadMemoryData(e.target.value);
+                  }}
+                  className="facts-search-input"
                 />
               </div>
             </div>
@@ -447,7 +512,7 @@ export function Settings() {
           <div className="settings-card">
             <h3 className="card-heading">Tool Execution Permissions</h3>
             <p className="card-desc">
-              All tools execute within the in-process SandboxGuard boundary. Write tools require human approval.
+              All tools execute within the In-process execution guard boundary. Write tools require human approval.
             </p>
 
             <table className="tools-perm-table">
@@ -473,7 +538,7 @@ export function Settings() {
                             : 'Approval Required (Write)'}
                       </span>
                     </td>
-                    <td className="tool-guard-cell font-mono">SandboxGuard</td>
+                    <td className="tool-guard-cell font-mono">In-process execution guard</td>
                   </tr>
                 ))}
               </tbody>
@@ -491,8 +556,8 @@ export function Settings() {
             <div className="sec-info-box">
               <Shield size={16} className="text-ocean-blue" />
               <div>
-                <h4>In-Process Sandbox</h4>
-                <p>Strict path jailing to workspace roots, 30s timeout enforcement, zero shell execution.</p>
+                <h4>In-Process Execution Guard</h4>
+                <p>Execution timeout (30s) and handler parameter validation. Does not provide adversarial container/OS sandbox isolation.</p>
               </div>
             </div>
           </div>

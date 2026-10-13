@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/common/Card';
 import TabBar from '../../components/common/TabBar';
 import { useChat } from '../../context/ChatContext';
 import { useHealth } from '../../context/HealthContext';
+import { fetchGatewayEvents } from '../../api/audit';
 import { 
   Radio, 
   ArrowDownLeft, 
@@ -12,19 +13,23 @@ import {
   Check, 
   ArrowLeft, 
   MessageSquare,
-  Layers,
-  Filter
+  Activity,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import './Gateway.css';
 
 export function Gateway() {
   const navigate = useNavigate();
-  const { sessions, activeSessionId, switchSession, messages: activeSessionMessages } = useChat();
+  const { inspectTurn } = useChat();
   const { isConnected, telegramPolling } = useHealth();
   
-  const [selectedScope, setSelectedScope] = useState('current'); // 'current' | 'all' | <sessionId>
   const [activeTab, setActiveTab] = useState('all');
+  const [backendEvents, setBackendEvents] = useState([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [eventsError, setEventsError] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [filterQuery, setFilterQuery] = useState('');
 
   // Return to chat on ESC
   useEffect(() => {
@@ -37,61 +42,75 @@ export function Gateway() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigate]);
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  // Load durable backend ledger events
+  const loadLedgerEvents = useCallback(async () => {
+    setIsLoadingEvents(true);
+    setEventsError(null);
+    try {
+      const channelParam = activeTab === 'all' ? undefined : activeTab;
+      const res = await fetchGatewayEvents({ channel: channelParam, limit: 100 });
+      setBackendEvents(res?.events || []);
+    } catch (err) {
+      setEventsError(err.message || 'Failed to load gateway ledger events');
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  }, [activeTab]);
 
-  // Assemble events based on selected chat scope
-  const scopedMessages = useMemo(() => {
-    if (selectedScope === 'all') {
-      const allMsgs = [];
-      sessions.forEach((s) => {
-        (s.messages || []).forEach((m) => {
-          allMsgs.push({
-            ...m,
-            sessionId: s.id,
-            sessionTitle: s.title || 'Untitled Session',
-          });
-        });
+  useEffect(() => {
+    let ignore = false;
+    const channelParam = activeTab === 'all' ? undefined : activeTab;
+    fetchGatewayEvents({ channel: channelParam, limit: 100 })
+      .then((res) => {
+        if (!ignore) {
+          setBackendEvents(res?.events || []);
+          setEventsError(null);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setEventsError(err.message || 'Failed to load gateway ledger events');
+        }
       });
-      // Sort chronologically descending
-      return allMsgs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab]);
+
+  // Tab configuration: Telegram only when configured, Discord absent
+  const tabs = useMemo(() => {
+    const list = [
+      { key: 'all', label: 'All Channels', count: backendEvents.length },
+      { key: 'web', label: 'Web / CLI', status: isConnected ? 'connected' : undefined },
+    ];
+    if (telegramPolling) {
+      list.push({
+        key: 'telegram',
+        label: 'Telegram',
+        badge: 'Polling Active',
+        badgeVariant: 'connected',
+        status: 'connected',
+      });
     }
+    return list;
+  }, [backendEvents.length, isConnected, telegramPolling]);
 
-    if (selectedScope === 'current') {
-      return (activeSessionMessages || []).map((m) => ({
-        ...m,
-        sessionId: activeSessionId,
-        sessionTitle: activeSession?.title || 'Current Session',
-      }));
-    }
-
-    // Specific session selected
-    const targetSession = sessions.find((s) => s.id === selectedScope);
-    if (!targetSession) return [];
-    return (targetSession.messages || []).map((m) => ({
-      ...m,
-      sessionId: targetSession.id,
-      sessionTitle: targetSession.title || 'Untitled Session',
-    }));
-  }, [selectedScope, sessions, activeSessionId, activeSessionMessages, activeSession]);
-
-  // Filter messages based on channel tab
-  const displayMessages = useMemo(() => {
-    if (activeTab === 'telegram' || activeTab === 'discord') return [];
-    return scopedMessages;
-  }, [activeTab, scopedMessages]);
-
-  const tabs = [
-    { key: 'all', label: 'All Channels', count: scopedMessages.length },
-    { key: 'web', label: 'Web / CLI', count: scopedMessages.length, status: isConnected ? 'connected' : undefined },
-    {
-      key: 'telegram',
-      label: 'Telegram',
-      badge: telegramPolling ? 'Polling' : 'Disabled',
-      badgeVariant: telegramPolling ? 'connected' : 'planned',
-      status: telegramPolling ? 'connected' : undefined,
-    },
-    { key: 'discord', label: 'Discord', badge: 'Planned', badgeVariant: 'planned' },
-  ];
+  // Filter events by tab and text query
+  const displayedEvents = useMemo(() => {
+    return backendEvents.filter((ev) => {
+      if (activeTab !== 'all' && ev.channel !== activeTab) return false;
+      if (!filterQuery.trim()) return true;
+      const q = filterQuery.toLowerCase();
+      const content = typeof ev.payload === 'object' ? JSON.stringify(ev.payload) : String(ev.payload || '');
+      return (
+        ev.event_id?.toLowerCase().includes(q) ||
+        ev.run_id?.toLowerCase().includes(q) ||
+        ev.event_type?.toLowerCase().includes(q) ||
+        ev.status?.toLowerCase().includes(q) ||
+        content.toLowerCase().includes(q)
+      );
+    });
+  }, [backendEvents, activeTab, filterQuery]);
 
   const formatTimestamp = (isoString) => {
     if (!isoString) return '—';
@@ -109,18 +128,12 @@ export function Gateway() {
     setTimeout(() => setCopiedId(null), 1800);
   };
 
-  const handleOpenInChat = (sessionId) => {
-    if (sessionId) {
-      switchSession(sessionId);
+  const handleInspectRun = (runId) => {
+    if (runId && inspectTurn) {
+      inspectTurn({ runId, trajectory: [] });
     }
     navigate('/');
   };
-
-  const currentChatTitle = selectedScope === 'current'
-    ? (activeSession?.title || 'Active Session')
-    : selectedScope === 'all'
-    ? 'All Conversations'
-    : (sessions.find(s => s.id === selectedScope)?.title || 'Selected Session');
 
   return (
     <div className="gateway-page animate-fade-in">
@@ -128,10 +141,19 @@ export function Gateway() {
       <div className="page-header">
         <div className="page-header-info">
           <h1 className="page-title">Gateway &amp; API Ledger</h1>
-          <p className="page-subtitle">Cross-channel message routing and inbound event telemetry</p>
+          <p className="page-subtitle">Durable cross-channel event telemetry backed by SQLite</p>
         </div>
 
         <div className="page-header-actions">
+          <button 
+            className="gateway-action-btn secondary"
+            onClick={loadLedgerEvents}
+            disabled={isLoadingEvents}
+            title="Refresh Ledger Events"
+          >
+            <RefreshCw size={13} className={isLoadingEvents ? 'animate-spin' : ''} />
+            <span>Refresh</span>
+          </button>
           <button 
             className="gateway-back-btn" 
             onClick={() => navigate('/')}
@@ -147,135 +169,76 @@ export function Gateway() {
         <article className="gateway-summary-item">
           <div className="gateway-summary-icon"><MessageSquare size={16} /></div>
           <div>
-            <span className="gateway-summary-label">Events in scope</span>
-            <strong>{scopedMessages.length}</strong>
+            <span className="gateway-summary-label">Durable Ledger Events</span>
+            <span className="gateway-summary-value">{backendEvents.length}</span>
           </div>
         </article>
+
         <article className="gateway-summary-item">
-          <div className="gateway-summary-icon"><Layers size={16} /></div>
+          <div className="gateway-summary-icon"><Radio size={16} /></div>
           <div>
-            <span className="gateway-summary-label">Conversations</span>
-            <strong>{sessions.length}</strong>
+            <span className="gateway-summary-label">Channels Configured</span>
+            <span className="gateway-summary-value">{telegramPolling ? '2 Active (Web, Telegram)' : '1 Active (Web)'}</span>
           </div>
         </article>
-        <article className="gateway-summary-item gateway-summary-status">
-          <div className={`gateway-summary-icon ${telegramPolling ? 'is-live' : ''}`}><Radio size={16} /></div>
+
+        <article className="gateway-summary-item">
+          <div className="gateway-summary-icon"><Activity size={16} /></div>
           <div>
-            <span className="gateway-summary-label">Channel runtime</span>
-            <strong>{telegramPolling ? 'Web + Telegram live' : 'Web / CLI live'}</strong>
+            <span className="gateway-summary-label">Storage Integrity</span>
+            <span className="gateway-summary-value">SQLite Durable</span>
           </div>
-          <span className={`runtime-indicator ${isConnected ? 'is-live' : 'is-offline'}`}>
-            {isConnected ? 'Backend online' : 'Backend offline'}
-          </span>
         </article>
       </section>
-
-      {/* Scope Toolbar & Session Switcher */}
-      <div className="gateway-scope-toolbar">
-        <div className="scope-select-group">
-          <Filter size={13} className="scope-filter-icon" />
-          <span className="scope-filter-label">Chat Scope:</span>
-          <select 
-            className="gateway-scope-select"
-            value={selectedScope}
-            onChange={(e) => setSelectedScope(e.target.value)}
-            aria-label="Filter gateway telemetry by chat session"
-          >
-            <option value="current">Current Chat: {activeSession?.title || 'Active Session'}</option>
-            <option value="all">All Conversations ({sessions.length} sessions, {sessions.reduce((acc, s) => acc + (s.messages?.length || 0), 0)} events)</option>
-            {sessions.length > 0 && (
-              <optgroup label="Saved Conversations">
-                {sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title || 'Untitled Chat'} ({s.messages?.length || 0} msgs)
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-        </div>
-
-        <div className="scope-actions-group">
-          {selectedScope !== 'all' && (
-            <button 
-              className="scope-open-chat-btn"
-              onClick={() => handleOpenInChat(selectedScope === 'current' ? activeSessionId : selectedScope)}
-              title="Open this conversation in Chat canvas"
-            >
-              <MessageSquare size={13} />
-              <span>Open in Chat</span>
-              <ArrowUpRight size={12} />
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Main Ledger Card */}
       <Card className="gateway-card">
         <TabBar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
+        <div className="gateway-controls" style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+            <Search size={14} className="text-muted" />
+            <input
+              type="text"
+              placeholder="Filter by event ID, run ID, event type, status, or content..."
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-display)',
+                fontSize: '12px',
+                fontFamily: 'var(--font-mono)',
+                outline: 'none',
+              }}
+            />
+          </div>
+        </div>
+
         <div className="gateway-body">
-          {displayMessages.length === 0 ? (
+          {eventsError && (
+            <div className="gateway-error-banner" style={{ padding: '10px 14px', background: 'var(--accent-subtle)', color: 'var(--accent)', fontSize: '12px' }}>
+              ⚠️ {eventsError}
+            </div>
+          )}
+
+          {displayedEvents.length === 0 ? (
             <div className="gateway-empty-wrap">
-              {activeTab === 'telegram' ? (
-                <div className="channel-state-panel">
-                  <div className="channel-state-copy">
-                    <div className={`channel-state-icon ${telegramPolling ? 'is-live' : ''}`}>
-                      <Radio size={20} />
-                    </div>
-                    <div>
-                      <span className="channel-state-eyebrow">
-                        Telegram · {telegramPolling ? 'polling enabled' : 'polling disabled'}
-                      </span>
-                      <h2>{telegramPolling ? 'Telegram is listening' : 'Telegram is available but inactive'}</h2>
-                      <p>
-                        {telegramPolling
-                          ? 'The backend adapter is receiving Telegram updates. This local ledger currently shows browser and CLI events only.'
-                          : 'Add a bot token and enable Telegram polling in the local environment to start the adapter.'}
-                      </p>
-                    </div>
+              <div className="channel-state-panel compact">
+                <div className="channel-state-copy">
+                  <div className="channel-state-icon"><MessageSquare size={20} /></div>
+                  <div>
+                    <span className="channel-state-eyebrow">Durable Ledger</span>
+                    <h2>No events found in this view</h2>
+                    <p>Inbound and outbound messages from Web and Telegram are logged here automatically.</p>
                   </div>
-                  <div className="channel-state-details" aria-label="Telegram adapter capabilities">
-                    <div><span>Inbound messages</span><strong>{telegramPolling ? 'Listening' : 'Paused'}</strong></div>
-                    <div><span>Outbound replies</span><strong>{telegramPolling ? 'Enabled' : 'Paused'}</strong></div>
-                    <div><span>Ledger visibility</span><strong>Not connected</strong></div>
-                  </div>
-                  <button className="gateway-action-btn secondary" onClick={() => setActiveTab('web')}>
-                    View Web / CLI traffic
-                    <ArrowUpRight size={13} />
-                  </button>
                 </div>
-              ) : activeTab === 'discord' ? (
-                <div className="channel-state-panel">
-                  <div className="channel-state-copy">
-                    <div className="channel-state-icon"><Radio size={20} /></div>
-                    <div>
-                      <span className="channel-state-eyebrow">Discord · roadmap</span>
-                      <h2>Discord is not connected</h2>
-                      <p>The adapter has not been implemented yet. No connection or event data is being simulated on this page.</p>
-                    </div>
-                  </div>
-                  <button className="gateway-action-btn secondary" onClick={() => setActiveTab('web')}>
-                    View active channel
-                    <ArrowUpRight size={13} />
-                  </button>
-                </div>
-              ) : (
-                <div className="channel-state-panel compact">
-                  <div className="channel-state-copy">
-                    <div className="channel-state-icon"><MessageSquare size={20} /></div>
-                    <div>
-                      <span className="channel-state-eyebrow">No events yet</span>
-                      <h2>No traffic in {currentChatTitle}</h2>
-                      <p>Send a prompt in Chat and the inbound request and assistant response will appear here.</p>
-                    </div>
-                  </div>
-                  <button className="gateway-action-btn" onClick={() => navigate('/')}>
-                    Open Chat
-                    <ArrowUpRight size={13} />
-                  </button>
-                </div>
-              )}
+                <button className="gateway-action-btn" onClick={() => navigate('/')}>
+                  Open Chat
+                  <ArrowUpRight size={13} />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="gateway-table-container">
@@ -283,37 +246,30 @@ export function Gateway() {
                 <thead>
                   <tr>
                     <th>Time</th>
-                    {selectedScope === 'all' && <th>Chat Session</th>}
                     <th>Channel</th>
                     <th>Direction</th>
-                    <th>Content</th>
+                    <th>Event Type</th>
+                    <th>Status</th>
+                    <th>Event ID</th>
                     <th>Run ID</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayMessages.map((msg, index) => {
-                    const isInbound = msg.role === 'user';
+                  {displayedEvents.map((ev, index) => {
+                    const isInbound = ev.direction === 'inbound';
+                    const payloadSnippet = typeof ev.payload === 'object'
+                      ? (ev.payload.text || ev.payload.reply || JSON.stringify(ev.payload))
+                      : String(ev.payload || '');
+
                     return (
-                      <tr key={msg.id || index} className="gateway-row">
+                      <tr key={ev.event_id || index} className="gateway-row">
                         <td className="gateway-cell-time mono">
-                          {formatTimestamp(msg.timestamp)}
+                          {formatTimestamp(ev.created_at)}
                         </td>
 
-                        {selectedScope === 'all' && (
-                          <td className="gateway-cell-session">
-                            <button 
-                              className="session-tag-pill"
-                              onClick={() => handleOpenInChat(msg.sessionId)}
-                              title="Jump to this chat session"
-                            >
-                              <MessageSquare size={11} />
-                              <span>{msg.sessionTitle}</span>
-                            </button>
-                          </td>
-                        )}
-
                         <td className="gateway-cell-channel">
-                          <span className="channel-badge web">web</span>
+                          <span className={`channel-badge ${ev.channel}`}>{ev.channel}</span>
                         </td>
 
                         <td className="gateway-cell-direction">
@@ -330,25 +286,72 @@ export function Gateway() {
                           )}
                         </td>
 
-                        <td className="gateway-cell-content" title={msg.content}>
+                        <td className="gateway-cell-content mono" title={payloadSnippet}>
                           <span className="content-text truncate">
-                            {msg.content}
+                            <strong>{ev.event_type}</strong>
+                            {payloadSnippet ? ` — ${payloadSnippet.slice(0, 40)}` : ''}
                           </span>
                         </td>
 
+                        <td>
+                          <span className={`delivery-badge status-${ev.status || 'completed'}`} style={{
+                            fontSize: '10px',
+                            fontFamily: 'var(--font-mono)',
+                            padding: '2px 6px',
+                            borderRadius: '3px',
+                            textTransform: 'uppercase',
+                            background: ev.status === 'failed' ? 'var(--accent-subtle)' : 'var(--surface-raised)',
+                            color: ev.status === 'failed' ? 'var(--accent)' : 'var(--text-display)',
+                            border: '1px solid var(--border)',
+                          }}>
+                            {ev.status || 'completed'}
+                          </span>
+                        </td>
+
+                        <td className="gateway-cell-eventid mono">
+                          <button
+                            className="run-id-pill"
+                            onClick={() => copyToClipboard(ev.event_id, `ev-${index}`)}
+                            title="Click to copy Event ID"
+                          >
+                            <span>{(ev.event_id || '').slice(0, 10)}...</span>
+                            {copiedId === `ev-${index}` ? (
+                              <Check size={12} className="copy-icon success" />
+                            ) : (
+                              <Copy size={12} className="copy-icon" />
+                            )}
+                          </button>
+                        </td>
+
                         <td className="gateway-cell-runid mono">
-                          {msg.runId ? (
+                          {ev.run_id ? (
                             <button
                               className="run-id-pill"
-                              onClick={() => copyToClipboard(msg.runId, msg.id || index)}
+                              onClick={() => copyToClipboard(ev.run_id, `run-${index}`)}
                               title="Click to copy Run ID"
                             >
-                              <span>{msg.runId.slice(0, 8)}...</span>
-                              {copiedId === (msg.id || index) ? (
+                              <span>{(ev.run_id || '').slice(0, 10)}...</span>
+                              {copiedId === `run-${index}` ? (
                                 <Check size={12} className="copy-icon success" />
                               ) : (
                                 <Copy size={12} className="copy-icon" />
                               )}
+                            </button>
+                          ) : (
+                            <span className="muted-dim">—</span>
+                          )}
+                        </td>
+
+                        <td>
+                          {ev.run_id ? (
+                            <button
+                              className="gateway-action-btn secondary"
+                              style={{ padding: '3px 8px', fontSize: '11px' }}
+                              onClick={() => handleInspectRun(ev.run_id)}
+                              title="Navigate to run trajectory"
+                            >
+                              <span>Inspect</span>
+                              <ArrowUpRight size={11} />
                             </button>
                           ) : (
                             <span className="muted-dim">—</span>

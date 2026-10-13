@@ -8,7 +8,7 @@ import './Overview.css';
 
 export function Overview() {
   const { isConnected, modelName } = useHealth();
-  const { messages, overviewTab, setOverviewTab, closeOverview } = useChat();
+  const { messages, overviewTab, setOverviewTab, closeOverview, approvalStatuses, handleApprovalDecision, activeSessionId } = useChat();
 
   const totalMessagesCount = messages.length;
   const liveApprovalMsg = messages.slice().reverse().find((m) => m.approvalRequest);
@@ -96,13 +96,17 @@ export function Overview() {
                 </p>
                 <ApprovalCard
                   approvalId={liveApproval.id || 'live-gate-1'}
-                  toolName={liveApproval.tool}
-                  arguments={liveApproval.args || {}}
+                  toolName={liveApproval.tool_name || liveApproval.tool || 'Unknown tool'}
+                  arguments={liveApproval.args || liveApproval.arguments || {}}
                   diff={liveApproval.diff || {}}
                   dangerousParams={liveApproval.dangerous_params || []}
                   warnings={liveApproval.warnings || []}
                   riskLevel={liveApproval.risk_level || 'high'}
                   isTainted={liveApproval.is_tainted}
+                  status={approvalStatuses?.[liveApproval.id]?.status || 'pending'}
+                  errorMessage={approvalStatuses?.[liveApproval.id]?.error || null}
+                  onApprove={(id) => handleApprovalDecision(id, 'approved', activeSessionId)}
+                  onDeny={(id) => handleApprovalDecision(id, 'denied', activeSessionId)}
                 />
               </>
             ) : (

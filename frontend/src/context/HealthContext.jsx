@@ -12,6 +12,7 @@ export function HealthProvider({ children }) {
   const [isConnected, setIsConnected] = useState(false);
   const [modelName, setModelName] = useState(null);
   const [telegramPolling, setTelegramPolling] = useState(false);
+  const [capabilities, setCapabilities] = useState({});
   const [lastChecked, setLastChecked] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,15 +24,18 @@ export function HealthProvider({ children }) {
         setIsConnected(true);
         setModelName(data.model || 'Unknown Model');
         setTelegramPolling(Boolean(data.telegram_polling));
+        setCapabilities(data.capabilities || {});
         setError(null);
       } else {
         setIsConnected(false);
         setTelegramPolling(false);
+        setCapabilities({});
         setError('Invalid response from backend');
       }
     } catch (err) {
       setIsConnected(false);
       setTelegramPolling(false);
+      setCapabilities({});
       setError(err.message || 'Backend unreachable');
     } finally {
       setIsLoading(false);
@@ -40,19 +44,49 @@ export function HealthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Immediate initial check
-    fetchHealth();
+    let ignore = false;
+    checkHealth()
+      .then((data) => {
+        if (!ignore && data && (data.status === 'ok' || data.status === 'healthy' || data.model)) {
+          setIsConnected(true);
+          setModelName(data.model || 'Unknown Model');
+          setTelegramPolling(Boolean(data.telegram_polling));
+          setCapabilities(data.capabilities || {});
+          setError(null);
+        } else if (!ignore) {
+          setIsConnected(false);
+          setTelegramPolling(false);
+          setCapabilities({});
+          setError('Invalid response from backend');
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setIsConnected(false);
+          setTelegramPolling(false);
+          setCapabilities({});
+          setError(err.message || 'Backend unreachable');
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoading(false);
+          setLastChecked(new Date());
+        }
+      });
 
-    // Setup periodic polling
     const timer = setInterval(fetchHealth, POLL_INTERVAL_MS);
-
-    return () => clearInterval(timer);
+    return () => {
+      ignore = true;
+      clearInterval(timer);
+    };
   }, [fetchHealth]);
 
   const value = {
     isConnected,
     modelName,
     telegramPolling,
+    capabilities,
     lastChecked,
     error,
     isLoading,

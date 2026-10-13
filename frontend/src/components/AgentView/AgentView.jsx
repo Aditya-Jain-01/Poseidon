@@ -7,7 +7,7 @@ import './AgentView.css';
  * Agent Profile View — displayed when sidebar is in Agent mode
  */
 export default function AgentView() {
-  const { activeAgent, healthStatus, llmSettings, agents } = useAgents();
+  const { activeAgent, healthStatus, llmSettings } = useAgents();
 
   if (!activeAgent) {
     return (
@@ -44,6 +44,7 @@ export default function AgentView() {
             <span className="profile-status-dot" />
             <span>
               {status === 'online' ? 'Online' : status === 'checking' ? 'Checking...' : 'Offline'}
+              {statusMessage ? ` (${statusMessage})` : ''}
             </span>
           </div>
 

@@ -353,3 +353,32 @@
 .status-denied {
   color: var(--accent);
 }
+
+.status-expired {
+  color: var(--warning);
+}
+
+.status-failed {
+  color: var(--accent);
+}
+
+.approval-failure-alert {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  margin-bottom: 8px;
+  border: 1px solid var(--accent);
+}
+
+.btn-approve:disabled,
+.btn-deny:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

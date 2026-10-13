@@ -27,12 +27,13 @@ export function ChatProvider({ children }) {
   const { activeAgentId } = useAgents();
   const [sessions, setSessions] = useLocalStorage('poseidon-chat-sessions', []);
   const [activeSessionId, setActiveSessionId] = useLocalStorage('poseidon-active-session-id', '');
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedTurn, setSelectedTurn] = useState(null);
+  const [approvalStatuses, setApprovalStatuses] = useState({});
   const abortControllerRef = useRef(null);
-  
+
   // Overview Drawer State (Right)
   const [isOverviewOpen, setIsOverviewOpen] = useLocalStorage('poseidon-overview-open', false);
   const [overviewTab, setOverviewTab] = useState('trajectory'); // 'trajectory' | 'topology' | 'security'
@@ -48,7 +49,7 @@ export function ChatProvider({ children }) {
       try {
         const stored = localStorage.getItem('poseidon-chat-messages');
         if (stored) legacyMessages = JSON.parse(stored);
-      } catch (e) {
+      } catch {
         // ignore parse error
       }
 
@@ -62,17 +63,17 @@ export function ChatProvider({ children }) {
     } else if (!activeSessionId || !sessions.some((s) => s.id === activeSessionId)) {
       setActiveSessionId(sessions[0].id);
     }
-  }, []);
+  }, [sessions, activeSessionId, setSessions, setActiveSessionId]);
 
   // Get active session
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0] || null;
   const messages = activeSession ? activeSession.messages : [];
 
-  const idCounter = useRef(Date.now());
+  const idCounter = useRef(0);
 
   const nextId = () => {
     idCounter.current += 1;
-    return `msg-${idCounter.current}`;
+    return `msg-${Date.now()}-${idCounter.current}`;
   };
 
   // Create a fresh session and switch to it immediately
@@ -230,9 +231,12 @@ export function ChatProvider({ children }) {
         err.message?.includes('NetworkError') ||
         err.message?.includes('Failed to connect');
 
-      const errorText = isConnectionError
-        ? 'Could not connect to the backend server. Is FastAPI running on http://127.0.0.1:8000?'
-        : err.message || 'Something went wrong.';
+      const isUnknownAgent = err.data?.error === 'unknown_agent';
+      const errorText = isUnknownAgent
+        ? `Unknown agent "${err.data.agent_id}". Available agents: ${(err.data.available_agent_ids || []).join(', ')}`
+        : isConnectionError
+          ? 'Could not connect to the backend server. Is FastAPI running on http://127.0.0.1:8000?'
+          : err.message || 'Something went wrong.';
 
       setError(errorText);
 
@@ -272,11 +276,33 @@ export function ChatProvider({ children }) {
   }, []);
 
   const handleApprovalDecision = useCallback(
-    async (approvalId, decision) => {
-      setIsLoading(true);
+    async (approvalId, decision, originatingSessionId = null) => {
+      // Find originating session
+      let targetSessionId = originatingSessionId;
+      if (!targetSessionId) {
+        const found = sessions.find((s) =>
+          (s.messages || []).some(
+            (m) =>
+              m.approvalRequest &&
+              (m.approvalRequest.id === approvalId || m.approvalRequest.approval_id === approvalId)
+          )
+        );
+        targetSessionId = found ? found.id : activeSessionId;
+      }
+
+      setApprovalStatuses((prev) => ({
+        ...prev,
+        [approvalId]: { status: 'submitting', error: null },
+      }));
       setError(null);
+
       try {
         const data = await sendApprovalDecision(approvalId, decision);
+        setApprovalStatuses((prev) => ({
+          ...prev,
+          [approvalId]: { status: decision, error: null },
+        }));
+
         const agentMessage = {
           id: nextId(),
           role: 'agent',
@@ -289,9 +315,10 @@ export function ChatProvider({ children }) {
           timestamp: new Date().toISOString(),
         };
         setSelectedTurn(agentMessage);
+
         setSessions((prev) =>
           prev.map((s) => {
-            if (s.id !== activeSessionId) return s;
+            if (s.id !== targetSessionId) return s;
             return {
               ...s,
               updatedAt: new Date().toISOString(),
@@ -300,12 +327,22 @@ export function ChatProvider({ children }) {
           })
         );
       } catch (err) {
+        const isExpired =
+          err.status === 404 ||
+          err.message?.toLowerCase().includes('expired') ||
+          err.message?.toLowerCase().includes('not found');
+        const finalStatus = isExpired ? 'expired' : 'failed';
+        setApprovalStatuses((prev) => ({
+          ...prev,
+          [approvalId]: {
+            status: finalStatus,
+            error: err.message || 'Failed to submit approval decision',
+          },
+        }));
         setError(err.message || 'Failed to submit approval decision');
-      } finally {
-        setIsLoading(false);
       }
     },
-    [activeSessionId, setSessions]
+    [activeSessionId, sessions, setSessions]
   );
 
   const inspectTurn = useCallback((msg) => {
@@ -351,6 +388,8 @@ export function ChatProvider({ children }) {
     messages,
     isLoading,
     error,
+    setError,
+    approvalStatuses,
 
     // Session Actions
     createNewSession,
@@ -380,24 +419,13 @@ export function ChatProvider({ children }) {
     closeHistory,
   };
 
-  return (
-    <ChatContext.Provider value={value}>
-      {children}
-    </ChatContext.Provider>
-  );
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 
-/**
- * Hook to access chat state and actions.
- * Must be used inside a <ChatProvider>.
- */
 export function useChat() {
-  const ctx = useContext(ChatContext);
-  if (!ctx) {
+  const context = useContext(ChatContext);
+  if (!context) {
     throw new Error('useChat must be used within a ChatProvider');
   }
-  return ctx;
+  return context;
 }
-
-export default ChatContext;
-

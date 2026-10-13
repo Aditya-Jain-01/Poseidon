@@ -21,8 +21,8 @@ import './MessageBubble.css';
 /**
  * Grok-style Message Renderer
  */
-export function MessageBubble({ message }) {
-  const { handleApprovalDecision, inspectTurn, sendMessage, messages } = useChat();
+export function MessageBubble({ message, sessionId }) {
+  const { handleApprovalDecision, inspectTurn, sendMessage, messages, approvalStatuses, activeSessionId } = useChat();
   const { modelName, isConnected } = useHealth();
   const { agents } = useAgents();
   const [copied, setCopied] = useState(false);
@@ -252,8 +252,10 @@ export function MessageBubble({ message }) {
               warnings={approval.warnings || ['Tool invocation requires authorization.']}
               riskLevel={approval.risk_level || 'high'}
               isTainted={approval.is_tainted || false}
-              onApprove={(id) => handleApprovalDecision(id, 'approved')}
-              onDeny={(id) => handleApprovalDecision(id, 'denied')}
+              status={approvalStatuses?.[approval.id]?.status || 'pending'}
+              errorMessage={approvalStatuses?.[approval.id]?.error || null}
+              onApprove={(id) => handleApprovalDecision(id, 'approved', sessionId || activeSessionId)}
+              onDeny={(id) => handleApprovalDecision(id, 'denied', sessionId || activeSessionId)}
             />
           </div>
         )}

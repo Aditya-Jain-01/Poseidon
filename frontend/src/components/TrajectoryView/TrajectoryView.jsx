@@ -3,17 +3,10 @@ import {
   Clock, 
   Layers, 
   Search, 
-  Terminal, 
-  FileEdit, 
-  ShieldAlert,
   Copy, 
   Check, 
   Code2, 
-  X,
-  Sparkles,
-  Info,
-  Calendar,
-  Activity
+  X
 } from 'lucide-react';
 import { fetchTrajectory } from '../../api/agents';
 import './TrajectoryView.css';
@@ -21,7 +14,7 @@ import './TrajectoryView.css';
 /**
  * Strip raw markdown syntax from preview snippets
  */
-export function stripMarkdown(text) {
+function stripMarkdown(text) {
   if (!text || typeof text !== 'string') return '';
   return text
     .replace(/(\*\*|__)(.*?)\1/g, '$2')
@@ -93,7 +86,7 @@ function SegmentedExecutionRow({ label, events, category, onSelectEvent }) {
  * High-Fidelity Poseidon Trajectory View
  * Dynamic Execution Waterfall Timeline, Event Ledger, and Multi-tab Inspector.
  */
-export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) {
+export function TrajectoryView({ messages = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [inspectorTab, setInspectorTab] = useState('summary'); // 'summary' | 'payload' | 'result' | 'schema' | 'timing' | 'trace'
@@ -115,7 +108,7 @@ export function TrajectoryView({ messages = [], sessionTitle = 'New Session' }) 
         if (res && res.steps) {
           setBackendTrajectoryMap((prev) => ({ ...prev, [rid]: res.steps }));
         }
-      } catch (err) {
+      } catch {
         // silent catch
       }
     });

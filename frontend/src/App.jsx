@@ -14,17 +14,12 @@ import './App.css';
 
 function AppLayout() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
-  const [isRightCollapsed, setIsRightCollapsed] = useState(true);
   const [rightPanelWidth, setRightPanelWidth] = useState(380);
   const [isResizingRight, setIsResizingRight] = useState(false);
   const [sidebarMode, setSidebarMode] = useState('chat'); // 'chat' | 'agents'
 
-  const { isOverviewOpen, toggleOverview, closeOverview } = useChat();
-
-  // Synchronize context overview toggle with right panel collapse
-  useEffect(() => {
-    setIsRightCollapsed(!isOverviewOpen);
-  }, [isOverviewOpen]);
+  const { isOverviewOpen, toggleOverview } = useChat();
+  const isRightCollapsed = !isOverviewOpen;
 
   // Handle Drag-to-Resize Right Panel
   useEffect(() => {

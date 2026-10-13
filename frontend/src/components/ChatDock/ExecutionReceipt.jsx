@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wrench, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Clock, Shield } from 'lucide-react';
+import { Wrench, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
 import './ExecutionReceipt.css';
 
 export function ExecutionReceipt({ toolCall, toolResult, riskLevel = 'auto' }) {

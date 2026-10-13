@@ -49,13 +49,43 @@ export function AgentProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     setIsLoading(true);
-    await Promise.all([loadAgents(), loadLLM()]);
-    setIsLoading(false);
+    try {
+      await Promise.all([loadAgents(), loadLLM()]);
+    } finally {
+      setIsLoading(false);
+    }
   }, [loadAgents, loadLLM]);
 
   useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    let ignore = false;
+    Promise.all([fetchAgents(), fetchLLMSettings()])
+      .then(([agentsData, llmData]) => {
+        if (!ignore) {
+          if (Array.isArray(agentsData)) {
+            setAgents(agentsData);
+            if (agentsData.length > 0 && !agentsData.some((a) => a.id === activeAgentId)) {
+              setActiveAgentId(agentsData[0].id);
+            }
+          }
+          if (llmData) {
+            setLlmSettings(llmData);
+          }
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          console.error('[AgentContext] Error fetching agents/LLM:', err);
+          setError(err.message || 'Failed to load agents');
+        }
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeAgentId]);
 
   const createAgent = useCallback(async (agentData) => {
     setIsLoading(true);

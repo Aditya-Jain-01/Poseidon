@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
   X, 
   Brain, 
   Layers, 
   Activity, 
   Terminal, 
-  Cpu, 
   CheckCircle2, 
   AlertTriangle,
   Calendar,
@@ -19,21 +18,15 @@ import './RightPanel.css';
 export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownResize }) {
   const { messages, isLoading, selectedTurn, overviewTab, setOverviewTab } = useChat();
   const { isConnected, modelName } = useHealth();
-  const [activeTab, setActiveTab] = useState('turn'); // 'turn' | 'topology' | 'telemetry'
 
-  // Synchronize when overviewTab changes from outside (e.g. slash commands)
-  useEffect(() => {
-    if (overviewTab === 'turn' || overviewTab === 'memory' || overviewTab === 'skills' || overviewTab === 'trajectory') {
-      setActiveTab('turn');
-    } else if (overviewTab === 'topology') {
-      setActiveTab('topology');
-    } else if (overviewTab === 'telemetry' || overviewTab === 'status') {
-      setActiveTab('telemetry');
-    }
-  }, [overviewTab]);
+  // Derive active tab from overviewTab to eliminate duplicated state and cascading renders
+  const activeTab = overviewTab === 'topology'
+    ? 'topology'
+    : overviewTab === 'telemetry' || overviewTab === 'status'
+      ? 'telemetry'
+      : 'turn';
 
   const handleTabClick = (tab) => {
-    setActiveTab(tab);
     if (setOverviewTab) setOverviewTab(tab);
   };
 
