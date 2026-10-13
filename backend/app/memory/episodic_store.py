@@ -27,6 +27,8 @@ except ImportError:
     np = None
 
 from app.config import settings
+from app.db.connection import connection
+from app.db.migrations import apply_migrations
 from app.memory.embeddings import embedding_service
 
 
@@ -40,83 +42,16 @@ class EpisodicStore:
             self.db_path = Path(db_path)
         self._embed = embed_svc or embedding_service
         self._dim = settings.poseidon_embedding_dim
-        self.init_db()
 
     @contextmanager
-    def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Each call opens a fresh connection with WAL mode and sqlite-vec loaded.
-        We don't pool connections because SQLite WAL already handles concurrency.
-        """
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        try:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA foreign_keys=ON;")
-            if HAS_SQLITE_VEC and sqlite_vec is not None:
-                try:
-                    conn.enable_load_extension(True)
-                    sqlite_vec.load(conn)
-                    conn.enable_load_extension(False)
-                except Exception:
-                    pass
+    def _get_connection(self):
+        self.init_db()
+        with connection(self.db_path, vectors=True) as conn:
             yield conn
-        finally:
-            conn.close()
 
-    def init_db(self) -> None:
-        """Create tables, indices, and the vec0 virtual table for KNN search.
-        The vec0 table creation may fail if sqlite-vec isn't available,
-        in which case we fall back to a plain TEXT column and do cosine
-        similarity in Python (slower but functional).
-        """
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS episodic_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    channel TEXT NOT NULL DEFAULT 'web',
-                    run_id TEXT,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT,
-                    consolidated INTEGER NOT NULL DEFAULT 0
-                );
-            """)
-
-            try:
-                cursor.execute("ALTER TABLE episodic_events ADD COLUMN consolidated INTEGER NOT NULL DEFAULT 0")
-            except Exception:
-                pass
-
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episodic_user_created 
-                ON episodic_events(user_id, created_at DESC);
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episodic_consolidated 
-                ON episodic_events(consolidated);
-            """)
-
-            try:
-                cursor.execute(f"""
-                    CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodes USING vec0(
-                        embedding float[{self._dim}]
-                    );
-                """)
-            except Exception:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS vec_episodes (
-                        rowid INTEGER PRIMARY KEY,
-                        embedding TEXT
-                    );
-                """)
-
-            conn.commit()
+    def init_db(self):
+        """Explicitly apply ordered migrations; also supports direct repository use."""
+        apply_migrations(self.db_path, settings.poseidon_embedding_dim)
 
     def log_event(
         self,
@@ -196,6 +131,26 @@ class EpisodicStore:
             run_id=run_id,
         )
         return user_id_int, ai_id_int
+
+    def record_completed_turn(self, conversation_key_json, user_id, user_text, reply, run_id, channel):
+        """Commit history and episodic persistence together, once per run."""
+        messages = [('user', user_text), ('assistant', reply)]
+        vectors = [json.dumps(self._embed.embed_text(content)) for _, content in messages]
+        with self._get_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            try:
+                if conn.execute('SELECT 1 FROM completed_turns WHERE run_id=?', (run_id,)).fetchone():
+                    conn.rollback()
+                    return False
+                for (role, content), vector in zip(messages, vectors):
+                    cursor = conn.execute('INSERT INTO episodic_events(user_id,channel,run_id,role,content) VALUES (?,?,?,?,?)', (user_id, channel, run_id, role, content))
+                    conn.execute('INSERT INTO vec_episodes(rowid,embedding) VALUES (?,?)', (cursor.lastrowid, vector))
+                conn.execute('INSERT INTO completed_turns(run_id,conversation_key_json,user_text,reply) VALUES (?,?,?,?)', (run_id, conversation_key_json, user_text, reply))
+                conn.commit()
+                return True
+            except BaseException:
+                conn.rollback()
+                raise
 
     def get_recent(
         self,

@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Generator
 
 from app.config import settings
+from app.db.connection import connection
+from app.db.migrations import apply_migrations
 
 
 def _sanitize_fts_query(query: str) -> str:
@@ -48,85 +50,16 @@ class SemanticStore:
         else:
             self.memory_md_path = Path(memory_md_path)
 
-        self.init_db()
 
     @contextmanager
-    def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager creating a connection and ensuring it is cleanly closed."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        try:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA foreign_keys=ON;")
+    def _get_connection(self):
+        self.init_db()
+        with connection(self.db_path, vectors=False) as conn:
             yield conn
-        finally:
-            conn.close()
 
-    def init_db(self) -> None:
-        """Set up the facts table, FTS5 index, and triggers that keep them in sync.
-        The FTS5 virtual table enables BM25-ranked keyword search over facts.
-        """
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS semantic_facts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    fact TEXT NOT NULL,
-                    category TEXT NOT NULL DEFAULT 'general',
-                    source_run_id TEXT,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    active INTEGER NOT NULL DEFAULT 1
-                );
-            """)
-
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_semantic_user_category
-                ON semantic_facts(user_id, category, active);
-            """)
-
-            cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS semantic_fts USING fts5(
-                    fact,
-                    category UNINDEXED,
-                    user_id UNINDEXED,
-                    fact_id UNINDEXED,
-                    tokenize='unicode61'
-                );
-            """)
-
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS trg_semantic_after_insert
-                AFTER INSERT ON semantic_facts
-                BEGIN
-                    INSERT INTO semantic_fts(rowid, fact, category, user_id, fact_id)
-                    VALUES (new.id, new.fact, new.category, new.user_id, new.id);
-                END;
-            """)
-
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS trg_semantic_after_delete
-                AFTER DELETE ON semantic_facts
-                BEGIN
-                    DELETE FROM semantic_fts WHERE rowid = old.id;
-                END;
-            """)
-
-            cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS trg_semantic_after_update
-                AFTER UPDATE ON semantic_facts
-                BEGIN
-                    DELETE FROM semantic_fts WHERE rowid = old.id;
-                    INSERT INTO semantic_fts(rowid, fact, category, user_id, fact_id)
-                    VALUES (new.id, new.fact, new.category, new.user_id, new.id);
-                END;
-            """)
-
-            conn.commit()
+    def init_db(self):
+        """Explicitly apply ordered migrations; also supports direct repository use."""
+        apply_migrations(self.db_path, settings.poseidon_embedding_dim)
 
     def add_fact(
         self,
