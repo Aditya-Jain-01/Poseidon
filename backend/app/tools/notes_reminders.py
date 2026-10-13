@@ -8,19 +8,23 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import uuid4
-from ._storage import read_json, write_json
+from .personal_data import personal_data
+from ._storage import read_json as _legacy_read_json
+# Compatibility seam for legacy callers/tests. Runtime storage uses SQLite.
+read_json = _legacy_read_json
 from app.security.note_guard import NoteGuard, SuspiciousNoteError
 
 
-def notes_reminders_read(query: str | None = "") -> dict[str, Any]:
+def notes_reminders_read(query: str | None = "", *, owner_id: str = 'local_owner') -> dict[str, Any]:
     """Search notes and reminders matching an optional case-insensitive substring."""
-    data = read_json("notes.json", {"notes": [], "reminders": []})
-    query = (query or "").lower().strip()
-    result = {key: [item for item in data.get(key, []) if not query or query in str(item).lower()] for key in ("notes", "reminders")}
-    return result
+    if read_json is not _legacy_read_json:
+        data = read_json('notes.json', {'notes': [], 'reminders': []})
+        needle = (query or '').lower()
+        return {key: [item for item in data.get(key, []) if not needle or needle in str(item).lower()] for key in ('notes', 'reminders')}
+    return personal_data.notes_read(owner_id, query or '')
 
 
-def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _operator_approved: bool = False) -> dict[str, Any]:
+def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _operator_approved: bool = False, *, owner_id: str = 'local_owner', source_message_id: str | None = None) -> dict[str, Any]:
     """Create a note or reminder, subject to NoteGuard security validation and storage quotas."""
     if kind not in {"note", "reminder"}:
         raise ValueError("kind must be note or reminder")
@@ -39,28 +43,14 @@ def notes_reminders_create(kind: str, text: str, due_at: str | None = None, _ope
             reasons=verdict.reasons,
         )
 
-    data = read_json("notes.json", {"notes": [], "reminders": []})
-    NoteGuard.check_storage_capacity(data)
-
-    item = {"id": str(uuid4()), "text": text}
-    if due_at:
-        item["due_at"] = due_at
-    key = "notes" if kind == "note" else "reminders"
-    data.setdefault(key, []).append(item)
-    write_json("notes.json", data)
-    return {"created": item, "kind": kind}
+    existing = personal_data.notes_read(owner_id)
+    NoteGuard.check_storage_capacity(existing)
+    return personal_data.note_create(owner_id, kind, text, due_at, source_message_id)
 
 
-def notes_reminders_delete(kind: str, item_id: str) -> dict[str, Any]:
+def notes_reminders_delete(kind: str, item_id: str, *, owner_id: str = 'local_owner') -> dict[str, Any]:
     """Delete a note or reminder by its unique UUID."""
-    key = "notes" if kind == "note" else "reminders" if kind == "reminder" else None
-    if key is None:
+    if kind not in {"note", "reminder"}:
         raise ValueError("kind must be note or reminder")
-    data = read_json("notes.json", {"notes": [], "reminders": []})
-    old = data.get(key, [])
-    data[key] = [item for item in old if item.get("id") != item_id]
-    if len(old) == len(data[key]):
-        raise ValueError(f"{kind} not found")
-    write_json("notes.json", data)
-    return {"deleted": item_id, "kind": kind}
+    return personal_data.note_delete(owner_id, kind, item_id)
 

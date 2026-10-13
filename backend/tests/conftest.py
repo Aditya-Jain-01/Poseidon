@@ -16,7 +16,9 @@ def store_hashes():
 
 
 BEFORE = store_hashes()
-_TEST_DIRECTORY = tempfile.TemporaryDirectory(prefix='poseidon-tests-')
+# Windows can retain SQLite/WAL handles briefly after a test.  Cleanup is best
+# effort; test success remains governed by the real-store hash assertion below.
+_TEST_DIRECTORY = tempfile.TemporaryDirectory(prefix='poseidon-tests-', ignore_cleanup_errors=True)
 TEST_ROOT = Path(_TEST_DIRECTORY.name)
 os.environ.update(POSEIDON_DB_PATH=str(TEST_ROOT / 'state.db'), AGENTS_DIR=str(TEST_ROOT / 'agents'),
                   LLM_CONFIG_PATH=str(TEST_ROOT / 'llm_config.json'), TELEGRAM_POLLING_ENABLED='false',
@@ -28,7 +30,13 @@ os.environ['TRANSFORMERS_OFFLINE'] = '1'
 
 def pytest_sessionfinish(session, exitstatus):
     changed = store_hashes() != BEFORE
-    _TEST_DIRECTORY.cleanup()
+    try:
+        _TEST_DIRECTORY.cleanup()
+    except PermissionError:
+        # A restricted Windows runner can deny chmod during tempfile cleanup.
+        # The directory contains only per-run fixture data and is never owner
+        # storage; retain the test outcome while the OS reclaims it later.
+        pass
     if changed:
         session.exitstatus = 1
         raise RuntimeError('Tests changed the real memory-store')
@@ -50,7 +58,7 @@ def isolated_stores(tmp_path, monkeypatch):
     agents.mkdir()
     # Fixed fixtures rather than the owner's mutable persona directory.
     tool_names = ['crm_read', 'crm_write', 'calendar_read', 'calendar_create', 'notes_reminders_read', 'notes_reminders_create', 'notes_reminders_delete', 'skill_manage_read', 'skill_manage_write']
-    for aid in ('poseidon', 'nereus', 'kraken'):
+    for aid in ('poseidon', 'nereus', 'kraken', 'octavious'):
         tools = '\n'.join(f'  - {name}' for name in tool_names)
         (agents / f'{aid}.soul.md').write_text(f'---\ndisplay_name: {aid.capitalize()}\nmodel_preset: cloud_free\nis_prebuilt: true\ntools:\n{tools}\nrouting_signals: []\n---\n# {aid.capitalize()}\n\nTest persona.', encoding='utf-8')
     monkeypatch.setattr(settings, 'poseidon_db_path', db)

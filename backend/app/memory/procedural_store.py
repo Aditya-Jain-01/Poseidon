@@ -103,6 +103,7 @@ class ProceduralStore:
         else:
             self.skills_dir = Path(skills_dir)
 
+        self.skills_dir.mkdir(parents=True, exist_ok=True)
         self._skills: list[Skill] = []
         self.reload()
 

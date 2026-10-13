@@ -198,6 +198,35 @@ class EpisodicStore:
         query_vector = self._embed.embed_text(query)
         vec_json = json.dumps(query_vector)
 
+        # Correctness takes precedence over an unfilterable sqlite-vec KNN
+        # query. Rank only this owner's candidates; global-KNN-then-filter can
+        # omit an owner's best match when another owner has many distractors.
+        with self._get_connection() as conn:
+            try:
+                candidates = conn.execute(
+                    "SELECT e.id,e.user_id,e.channel,e.run_id,e.role,e.content,e.created_at,e.metadata,e.consolidated,v.embedding "
+                    "FROM episodic_events e JOIN vec_episodes v ON e.id=v.rowid WHERE e.user_id=?", (user_id,)
+                ).fetchall()
+                q_norm = sum(float(x) * float(x) for x in query_vector) ** 0.5
+                scored = []
+                for row in candidates:
+                    raw = row['embedding']
+                    vector = json.loads(raw) if isinstance(raw, str) else None
+                    if not vector or not q_norm:
+                        continue
+                    norm = sum(float(x) * float(x) for x in vector) ** 0.5
+                    if not norm:
+                        continue
+                    score = sum(float(a) * float(b) for a, b in zip(query_vector, vector)) / (q_norm * norm)
+                    item = dict(row); item.pop('embedding', None); item['_vec_distance'] = 1.0 - score
+                    scored.append((item['_vec_distance'], item))
+                if scored:
+                    return [item for _, item in sorted(scored, key=lambda pair: (pair[0], pair[1]['id']))[:limit]]
+            except (sqlite3.Error, ValueError, TypeError, json.JSONDecodeError):
+                # sqlite-vec may expose its native column as a non-JSON blob;
+                # retain the compatibility path below in that case.
+                pass
+
         # Over-fetch because vec0 can't filter by user_id in the KNN query
         fetch_limit = limit * 4
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useRef, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { sendChatMessage, sendApprovalDecision } from '../api/chat';
+import { useAgents } from './AgentContext';
 
 export const ChatContext = createContext(null);
 
@@ -23,6 +24,7 @@ function createNewSessionObject(title = 'New Conversation') {
  * Persisted in localStorage.
  */
 export function ChatProvider({ children }) {
+  const { activeAgentId } = useAgents();
   const [sessions, setSessions] = useLocalStorage('poseidon-chat-sessions', []);
   const [activeSessionId, setActiveSessionId] = useLocalStorage('poseidon-active-session-id', '');
   
@@ -174,7 +176,7 @@ export function ChatProvider({ children }) {
     setError(null);
 
     try {
-      const data = await sendChatMessage(text.trim(), 'local_user', controller.signal, targetSessionId);
+      const data = await sendChatMessage(text.trim(), 'local_user', controller.signal, targetSessionId, activeAgentId);
 
       const agentMessage = {
         id: nextId(),
@@ -258,7 +260,7 @@ export function ChatProvider({ children }) {
       }
       setIsLoading(false);
     }
-  }, [isLoading, activeSessionId, sessions, createNewSession, setSessions]);
+  }, [isLoading, activeSessionId, sessions, activeAgentId, createNewSession, setSessions]);
 
   // Stop active generation
   const stopGeneration = useCallback(() => {

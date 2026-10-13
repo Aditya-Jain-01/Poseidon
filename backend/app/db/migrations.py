@@ -64,7 +64,21 @@ RUNTIME_SQL = (
     "CREATE TABLE tool_executions (run_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, arguments_hash TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('running','completed','failed')), result_json TEXT, PRIMARY KEY(run_id,tool_call_id))",
     "CREATE TABLE completed_turns (run_id TEXT PRIMARY KEY, conversation_key_json TEXT NOT NULL, user_text TEXT NOT NULL, reply TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
 )
-MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL))
+PERSONAL_DATA_SQL = (
+    "CREATE TABLE personal_imports (source_name TEXT PRIMARY KEY, checksum TEXT NOT NULL, imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE notes (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('note','reminder')), text TEXT NOT NULL, due_at TEXT, source_message_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(owner_id, source_message_id))",
+    "CREATE INDEX idx_notes_owner_kind ON notes(owner_id, kind, created_at DESC)",
+    "CREATE TABLE calendar_events (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, starts_at_utc TEXT NOT NULL, ends_at_utc TEXT, original_timezone TEXT NOT NULL DEFAULT 'UTC', description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE INDEX idx_calendar_owner_start ON calendar_events(owner_id, starts_at_utc)",
+    "CREATE TABLE crm_contacts (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE INDEX idx_crm_owner ON crm_contacts(owner_id)",
+    "CREATE TABLE personal_tasks (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', source_message_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(owner_id, source_message_id))",
+    "CREATE TABLE named_lists (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(owner_id, name))",
+    "CREATE TABLE named_list_items (id TEXT PRIMARY KEY, list_id TEXT NOT NULL REFERENCES named_lists(id) ON DELETE CASCADE, text TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE agent_definitions (id TEXT PRIMARY KEY, version INTEGER NOT NULL, definition_json TEXT NOT NULL, is_seed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE memory_consolidation_jobs (owner_id TEXT PRIMARY KEY, status TEXT NOT NULL, batch_hash TEXT, last_error TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+)
+MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL))
 
 
 def apply_migrations(db_path, embedding_dim=384):

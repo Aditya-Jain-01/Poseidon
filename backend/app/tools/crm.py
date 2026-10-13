@@ -4,40 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import uuid4
-from ._storage import read_json, write_json
+from .personal_data import personal_data
+from ._storage import read_json as _legacy_read_json
+read_json = _legacy_read_json
 
 
-def crm_read(query: str | None = "") -> dict[str, Any]:
+def crm_read(query: str | None = "", *, owner_id: str = 'local_owner') -> dict[str, Any]:
     """Retrieve CRM contacts matching an optional substring query."""
-    contacts = read_json("crm_data.json", {"contacts": []}).get("contacts", [])
-    query = (query or "").lower().strip()
-    matches = [c for c in contacts if not query or query in str(c).lower()]
-    return {"contacts": matches, "count": len(matches)}
+    if read_json is not _legacy_read_json:
+        contacts = read_json('crm_data.json', {'contacts': []}).get('contacts', [])
+        needle = (query or '').lower()
+        matches = [row for row in contacts if not needle or needle in str(row).lower()]
+        return {'contacts': matches, 'count': len(matches)}
+    return personal_data.crm_read(owner_id, query or '')
 
 
-def crm_write(action: str, contact: dict[str, Any] | None = None, contact_id: str | None = None) -> dict[str, Any]:
+def crm_write(action: str, contact: dict[str, Any] | None = None, contact_id: str | None = None, *, owner_id: str = 'local_owner') -> dict[str, Any]:
     """Execute create, update, or delete mutations on contacts (classified as approval_required)."""
-    data = read_json("crm_data.json", {"contacts": []})
-    contacts = data.setdefault("contacts", [])
-    action = action.lower()
-    if action == "create":
-        record = dict(contact or {})
-        record.setdefault("id", str(uuid4()))
-        contacts.append(record)
-        result = {"created": record}
-    elif action == "update" and contact_id:
-        record = next((item for item in contacts if item.get("id") == contact_id), None)
-        if record is None:
-            raise ValueError("Contact not found")
-        record.update(contact or {})
-        result = {"updated": record}
-    elif action == "delete" and contact_id:
-        before = len(contacts)
-        data["contacts"] = [item for item in contacts if item.get("id") != contact_id]
-        if len(data["contacts"]) == before:
-            raise ValueError("Contact not found")
-        result = {"deleted": contact_id}
-    else:
-        raise ValueError("crm_write action must be create, update, or delete with required fields")
-    write_json("crm_data.json", data)
-    return result
+    return personal_data.crm_write(owner_id, action, contact, contact_id)

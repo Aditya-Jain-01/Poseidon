@@ -1,4 +1,4 @@
-"""In-process capability sandboxing and least-privilege boundary.
+"""In-process execution guard for trusted Poseidon tool handlers.
 
 Enforces:
 1. Filesystem path jailing: only permitted subtrees under memory-store/ or designated scratch.
@@ -26,16 +26,26 @@ _DEFAULT_TIMEOUT_SECONDS = 5.0
 _thread_pool = ThreadPoolExecutor(max_workers=4)
 
 
-class SandboxSecurityError(PermissionError):
-    """Raised when an operation violates sandbox containment."""
+class ExecutionSecurityError(PermissionError):
+    """Raised when an operation violates execution-guard containment."""
 
 
-class SandboxTimeoutError(TimeoutError):
-    """Raised when a tool execution exceeds the configured wall-clock timeout."""
+class ExecutionTimeoutError(TimeoutError):
+    """Raised when a tool execution exceeds the configured wall-clock timeout.
+
+    A timeout cannot safely stop a thread that is already running. Tool handlers
+    therefore must be idempotent; the execution repository enforces that at the
+    orchestration boundary.
+    """
 
 
-class SandboxGuard:
-    """Least-privilege execution boundary for tools."""
+class ExecutionGuard:
+    """Validation and timeout guard, not an adversarial sandbox.
+
+    It runs reviewed built-in handlers in the Poseidon process. It does not
+    isolate filesystem, network, or arbitrary third-party code. MCP process
+    supervision and arbitrary plugin loading are deliberately deferred to M8.
+    """
 
     @classmethod
     def get_allowed_roots(cls) -> list[Path]:
@@ -50,11 +60,11 @@ class SandboxGuard:
         """
         raw_str = str(path).strip()
         if not raw_str:
-            raise SandboxSecurityError("Path cannot be empty.")
+            raise ExecutionSecurityError("Path cannot be empty.")
 
         # Check for path traversal attempts before resolving
         if ".." in raw_str:
-            raise SandboxSecurityError(f"Path traversal detected: {raw_str}")
+            raise ExecutionSecurityError(f"Path traversal detected: {raw_str}")
 
         resolved = Path(path).resolve()
 
@@ -68,7 +78,7 @@ class SandboxGuard:
                 continue
 
         if not is_allowed:
-            raise SandboxSecurityError(
+            raise ExecutionSecurityError(
                 f"Path access denied: '{resolved}' is outside allowed directories: {[str(r) for r in _ALLOWED_ROOTS]}"
             )
 
@@ -92,7 +102,7 @@ class SandboxGuard:
         tool = (tool_name or "").strip().lower()
 
         if "terminal" in tool or "shell" in tool or "bash" in tool or "exec" in tool:
-            raise SandboxSecurityError(f"Tool '{tool_name}' is forbidden: terminal execution is disabled in v1.")
+            raise ExecutionSecurityError(f"Tool '{tool_name}' is forbidden: terminal execution is disabled in v1.")
 
         for key, val in arguments.items():
             if isinstance(val, str) and ("path" in key.lower() or "file" in key.lower() or "dir" in key.lower()):
@@ -111,8 +121,15 @@ class SandboxGuard:
                 )
             return result
         except asyncio.TimeoutError as exc:
-            raise SandboxTimeoutError(f"Tool '{tool_name}' timed out after {timeout_seconds}s") from exc
+            raise ExecutionTimeoutError(f"Tool '{tool_name}' timed out after {timeout_seconds}s") from exc
         except Exception as exc:
-            if isinstance(exc, SandboxSecurityError):
+            if isinstance(exc, ExecutionSecurityError):
                 raise
             raise
+
+
+# Compatibility aliases for callers during the M3 migration. New code must use
+# ExecutionGuard and the Execution* exception names above.
+SandboxGuard = ExecutionGuard
+SandboxSecurityError = ExecutionSecurityError
+SandboxTimeoutError = ExecutionTimeoutError

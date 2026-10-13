@@ -9,16 +9,18 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from app.agents import qa_agent
 from app.config import settings
-from app.models import InboundEvent, ConversationKey, ToolCall, ApprovalDecision, RunResult
+from app.models import InboundEvent, ConversationKey, ToolCall, ToolExecutionContext, ApprovalDecision, RunResult
 from app.memory.memory_engine import memory_engine
 from app.orchestration.approval_store import ApprovalStore, ExecutionStore
 from app.orchestration.state import AgentState
 from app.orchestration.trajectory import trajectory_store
-from app.security.note_guard import NoteGuard
 from app.security.risk_analyzer import RiskAnalyzer
+from app.security.note_guard import NoteGuard
 from app.security.secrets import redact
 from app.security.taint import is_channel_untrusted
-from app.tools.registry import execute_tool, get_tier, get_tools_for_agent
+from app.tools.registry import get_tools_for_agent
+from app.tools.policy import ToolPolicyService
+from app.tools.execution import ToolExecutionService
 
 DEFAULT_PRIMARY_AGENT = 'poseidon'
 
@@ -32,6 +34,8 @@ class HarnessServices:
     tool_executor: Callable | None = None
     tool_schemas: Callable | None = None
     tool_tier: Callable | None = None
+    tool_policy: ToolPolicyService = field(default_factory=ToolPolicyService)
+    tool_execution_service: ToolExecutionService = field(default_factory=ToolExecutionService)
 
     def __post_init__(self):
         if self.executions is None:
@@ -41,6 +45,10 @@ class HarnessServices:
 def _allowed(services, agent_id, name):
     schemas = (services.tool_schemas or get_tools_for_agent)(agent_id)
     return name in {s['function']['name'] for s in schemas}
+
+
+def _allowed_names(services, agent_id):
+    return [s['function']['name'] for s in (services.tool_schemas or get_tools_for_agent)(agent_id)]
 
 
 def _tool_message(call, result):
@@ -85,17 +93,20 @@ def build_graph(checkpointer, services):
                     'tool_results': [*state['tool_results'], *[{'tool_call_id': c['id'], 'tool_name': c['name'], 'result': result} for c in queue]],
                     'pending_tool_calls': [], 'current_tool_call': None, 'policy_decision': {'decision': 'limit'}}
         call = queue.pop(0)
-        if not _allowed(services, state['active_agent'], call['name']):
-            policy = {'decision': 'deny', 'reasons': ['Unknown tool or agent lacks permission']}
-        else:
-            tier = (services.tool_tier or get_tier)(call['name'])
-            policy = {'decision': 'require_approval' if tier == 'approval_required' else 'allow', 'reasons': []}
+        context = ToolExecutionContext(actor=state['actor'], conversation_key=state['conversation_key'], run_id=state['run_id'], agent_id=state['active_agent'], is_tainted=state['is_tainted'], taint_sources=state['taint_sources'])
+        # Tests may deliberately inject a policy-tier double. Production has
+        # no override and always uses the authoritative ToolPolicyService.
+        if services.tool_tier is not None:
+            tier = services.tool_tier(call['name'])
+            policy = {'decision': 'require_approval' if tier == 'approval_required' else 'allow', 'reasons': [], 'policy_version': 'test-adapter'}
             if tier == 'guarded_auto' and call['name'] == 'notes_reminders_create':
                 verdict = NoteGuard.inspect(call['arguments'].get('text', ''))
                 if verdict.verdict == 'reject':
-                    policy = {'decision': 'deny', 'reasons': verdict.reasons}
+                    policy = {'decision': 'deny', 'reasons': verdict.reasons, 'policy_version': 'test-adapter'}
                 elif verdict.verdict == 'suspicious':
-                    policy = {'decision': 'require_approval', 'reasons': verdict.reasons}
+                    policy = {'decision': 'require_approval', 'reasons': verdict.reasons, 'policy_version': 'test-adapter'}
+        else:
+            policy = services.tool_policy.evaluate(call, context, agent_allowed_tools=_allowed_names(services, state['active_agent']), calls_used=state['tool_call_count'], max_calls=settings.poseidon_max_tool_calls).model_dump()
         return {'pending_tool_calls': queue, 'current_tool_call': call, 'policy_decision': policy, 'approval_status': ''}
 
     def route_call(state):
@@ -144,7 +155,11 @@ def build_graph(checkpointer, services):
         if call['name'] == 'notes_reminders_create' and state.get('approval_status') == 'approved':
             arguments['_operator_approved'] = True
         try:
-            result = await (services.tool_executor or execute_tool)(call['name'], arguments)
+            if services.tool_executor:
+                result = await services.tool_executor(call['name'], arguments)
+            else:
+                context = ToolExecutionContext(actor=state['actor'], conversation_key=state['conversation_key'], run_id=state['run_id'], agent_id=state['active_agent'], is_tainted=state['is_tainted'], taint_sources=state['taint_sources'])
+                result = await services.tool_execution_service.execute(call, context, approval_granted=state.get('approval_status') == 'approved')
             result = json.loads(json.dumps(result, default=str))
         except Exception as exc:
             result = {'error': type(exc).__name__, 'detail': redact(str(exc))}

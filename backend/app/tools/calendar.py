@@ -4,21 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import uuid4
-from ._storage import read_json, write_json
+from .personal_data import personal_data
 
 
-def calendar_read(query: str | None = "") -> dict[str, Any]:
+def calendar_read(query: str | None = "", *, owner_id: str = 'local_owner') -> dict[str, Any]:
     """Retrieve scheduled calendar events, optionally filtered by search text."""
-    events = read_json("calendar.json", {"events": []}).get("events", [])
-    query = (query or "").lower().strip()
-    events = [event for event in events if not query or query in str(event).lower()]
-    return {"events": events, "count": len(events)}
+    return personal_data.calendar_read(owner_id, query or '')
 
 
-def calendar_create(title: str, starts_at: str, ends_at: str | None = None, description: str = "") -> dict[str, Any]:
+def calendar_create(title: str, starts_at: str, ends_at: str | None = None, description: str = "", *, owner_id: str = 'local_owner', timezone_name: str = 'UTC') -> dict[str, Any]:
     """Create and persist a new calendar event."""
-    data = read_json("calendar.json", {"events": []})
-    event = {"id": str(uuid4()), "title": title, "starts_at": starts_at, "ends_at": ends_at, "description": description}
-    data.setdefault("events", []).append(event)
-    write_json("calendar.json", data)
-    return {"created": event}
+    return personal_data.calendar_create(owner_id, title, starts_at, ends_at, description, timezone_name)

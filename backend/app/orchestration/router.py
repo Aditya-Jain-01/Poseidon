@@ -8,8 +8,24 @@ from app.orchestration.graph import DEFAULT_PRIMARY_AGENT
 from app.soul import soul_store
 
 
-def route_request(user_text: str, default_agent: str = DEFAULT_PRIMARY_AGENT) -> str:
-    """Resolve target agent by priority: /agent directive > @mention > keyword signal > default."""
+class UnknownAgentError(ValueError):
+    def __init__(self, agent_id: str, available: list[str]):
+        super().__init__(f"unknown_agent: {agent_id}; available: {', '.join(available)}")
+        self.agent_id, self.available = agent_id, available
+
+
+def route_request(user_text: str, default_agent: str = DEFAULT_PRIMARY_AGENT, explicit_agent_id: str | None = None) -> str:
+    """Resolve explicit API selection, directive, mention, signals, then default.
+
+    Explicit selections never silently fall back: callers can display a useful
+    ``unknown_agent`` response rather than pretending a different agent ran.
+    """
+    available = [a['id'] for a in soul_store.load_all_agents()]
+    if explicit_agent_id:
+        candidate = explicit_agent_id.lower().strip()
+        if candidate not in available:
+            raise UnknownAgentError(candidate, available)
+        return candidate
     if not user_text:
         return default_agent
 
@@ -19,15 +35,15 @@ def route_request(user_text: str, default_agent: str = DEFAULT_PRIMARY_AGENT) ->
         parts = cleaned.split(maxsplit=2)
         if len(parts) >= 2:
             candidate = parts[1].lower().strip()
-            from app.llm_providers import DEFAULT_AGENT_OVERRIDES
-            if soul_store.get_agent(candidate) or candidate in DEFAULT_AGENT_OVERRIDES:
-                return candidate
+            if candidate not in available:
+                raise UnknownAgentError(candidate, available)
+            return candidate
 
     if cleaned.startswith("@"):
         first_token = cleaned.split()[0][1:].lower()
-        from app.llm_providers import DEFAULT_AGENT_OVERRIDES
-        if soul_store.get_agent(first_token) or first_token in DEFAULT_AGENT_OVERRIDES:
-            return first_token
+        if first_token not in available:
+            raise UnknownAgentError(first_token, available)
+        return first_token
 
     lower_text = cleaned.lower()
     signals = soul_store.get_routing_signals()

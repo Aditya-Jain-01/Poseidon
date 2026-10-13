@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     user_id: str = Field(default="local_user")
     channel: str = Field(default="web")
     thread_id: Identifier | None = None
+    agent_id: Identifier | None = None
 
 
 class ChatResponse(BaseModel):
@@ -77,7 +78,11 @@ async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends
 
     run_id = str(uuid4())
     try:
-        result = await run_agent(event, run_id)
+        from app.orchestration.router import route_request, UnknownAgentError
+        target_agent = route_request(req.text, explicit_agent_id=req.agent_id)
+        result = await (run_agent(event, run_id, agent_id=target_agent) if req.agent_id else run_agent(event, run_id))
+    except UnknownAgentError as e:
+        return JSONResponse(status_code=422, content={"error": "unknown_agent", "agent_id": e.agent_id, "available_agent_ids": e.available, "run_id": run_id})
     except Exception as e:
         return JSONResponse(
             status_code=502,

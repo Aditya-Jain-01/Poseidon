@@ -1,4 +1,4 @@
-"""Central tool definitions with MCP discovery and sandboxed execution.
+"""Authoritative registry for reviewed built-in and deferred external tools.
 
 All tools (native and MCP) share this unified interface and least-privilege boundary.
 """
@@ -7,7 +7,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable
 from app.soul import soul_store
-from app.security.sandbox import SandboxGuard
+from app.models import RESERVED_ARGUMENTS
+from app.security.sandbox import ExecutionGuard
 from . import calendar, crm, notes_reminders, skill_manage
 from .mcp_manager import mcp_manager
 
@@ -42,23 +43,51 @@ def _optional_query(description: str) -> dict[str, Any]:
 #   guarded_auto     — auto but NoteGuard may escalate to approval
 #   approval_required — always pauses for operator confirmation
 BASE_TOOL_REGISTRY: dict[str, dict[str, Any]] = {
-    "crm_read": {"tier": "auto", "handler": crm.crm_read, "schema": _schema("crm_read", "Search local CRM contacts.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all contacts.")})},
-    "crm_write": {"tier": "approval_required", "handler": crm.crm_write, "schema": _schema("crm_write", "Create, update, or delete a local CRM contact.", {"action": {"type": "string", "enum": ["create", "update", "delete"]}, "contact": {"type": "object"}, "contact_id": {"type": "string"}}, ["action"])},
-    "notes_reminders_read": {"tier": "auto", "handler": notes_reminders.notes_reminders_read, "schema": _schema("notes_reminders_read", "Read local notes and reminders.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all notes and reminders.")})},
-    "notes_reminders_create": {"tier": "guarded_auto", "handler": notes_reminders.notes_reminders_create, "schema": _schema("notes_reminders_create", "Create a note or reminder.", {"kind": {"type": "string", "enum": ["note", "reminder"]}, "text": {"type": "string"}, "due_at": {"type": "string"}}, ["kind", "text"])},
-    "notes_reminders_delete": {"tier": "approval_required", "handler": notes_reminders.notes_reminders_delete, "schema": _schema("notes_reminders_delete", "Delete a note or reminder.", {"kind": {"type": "string", "enum": ["note", "reminder"]}, "item_id": {"type": "string"}}, ["kind", "item_id"])},
-    "calendar_read": {"tier": "auto", "handler": calendar.calendar_read, "schema": _schema("calendar_read", "Read local calendar events.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all local events.")})},
-    "calendar_create": {"tier": "approval_required", "handler": calendar.calendar_create, "schema": _schema("calendar_create", "Create a local calendar event.", {"title": {"type": "string"}, "starts_at": {"type": "string"}, "ends_at": {"type": "string"}, "description": {"type": "string"}}, ["title", "starts_at"])},
-    "skill_manage_read": {"tier": "auto", "handler": skill_manage.skill_manage_read, "schema": _schema("skill_manage_read", "List procedural skills.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all skills.")})},
-    "skill_manage_write": {"tier": "approval_required", "handler": skill_manage.skill_manage_write, "schema": _schema("skill_manage_write", "Create a procedural skill.", {"name": {"type": "string"}, "description": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}}, "content": {"type": "string"}}, ["name", "description", "triggers", "content"])},
+    "crm_read": {"name": "crm_read", "description": "Search local CRM contacts.", "tier": "auto", "base_tier": "auto", "has_side_effects": False, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": crm.crm_read, "schema": _schema("crm_read", "Search local CRM contacts.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all contacts.")})},
+    "crm_write": {"name": "crm_write", "description": "Create, update, or delete a local CRM contact.", "tier": "approval_required", "base_tier": "approval_required", "has_side_effects": True, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": crm.crm_write, "schema": _schema("crm_write", "Create, update, or delete a local CRM contact.", {"action": {"type": "string", "enum": ["create", "update", "delete"]}, "contact": {"type": "object"}, "contact_id": {"type": "string"}}, ["action"])},
+    "notes_reminders_read": {"name": "notes_reminders_read", "description": "Read local notes and reminders.", "tier": "auto", "base_tier": "auto", "has_side_effects": False, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": notes_reminders.notes_reminders_read, "schema": _schema("notes_reminders_read", "Read local notes and reminders.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all notes and reminders.")})},
+    "notes_reminders_create": {"name": "notes_reminders_create", "description": "Create a note or reminder.", "tier": "guarded_auto", "base_tier": "guarded_auto", "has_side_effects": True, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": notes_reminders.notes_reminders_create, "schema": _schema("notes_reminders_create", "Create a note or reminder.", {"kind": {"type": "string", "enum": ["note", "reminder"]}, "text": {"type": "string"}, "due_at": {"type": "string"}}, ["kind", "text"])},
+    "notes_reminders_delete": {"name": "notes_reminders_delete", "description": "Delete a note or reminder.", "tier": "approval_required", "base_tier": "approval_required", "has_side_effects": True, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": notes_reminders.notes_reminders_delete, "schema": _schema("notes_reminders_delete", "Delete a note or reminder.", {"kind": {"type": "string", "enum": ["note", "reminder"]}, "item_id": {"type": "string"}}, ["kind", "item_id"])},
+    "calendar_read": {"name": "calendar_read", "description": "Read local calendar events.", "tier": "auto", "base_tier": "auto", "has_side_effects": False, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": calendar.calendar_read, "schema": _schema("calendar_read", "Read local calendar events.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all local events.")})},
+    "calendar_create": {"name": "calendar_create", "description": "Create a local calendar event.", "tier": "approval_required", "base_tier": "approval_required", "has_side_effects": True, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": calendar.calendar_create, "schema": _schema("calendar_create", "Create a local calendar event.", {"title": {"type": "string"}, "starts_at": {"type": "string"}, "ends_at": {"type": "string"}, "description": {"type": "string"}}, ["title", "starts_at"])},
+    "skill_manage_read": {"name": "skill_manage_read", "description": "List procedural skills.", "tier": "auto", "base_tier": "auto", "has_side_effects": False, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": skill_manage.skill_manage_read, "schema": _schema("skill_manage_read", "List procedural skills.", {"query": _optional_query("Case-insensitive search text. Use null or an empty string to return all skills.")})},
+    "skill_manage_write": {"name": "skill_manage_write", "description": "Create a procedural skill.", "tier": "approval_required", "base_tier": "approval_required", "has_side_effects": True, "timeout_seconds": 5, "trusted_provenance": "built_in", "allowed_agents": ["*"], "handler": skill_manage.skill_manage_write, "schema": _schema("skill_manage_write", "Create a procedural skill.", {"name": {"type": "string"}, "description": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}}, "content": {"type": "string"}}, ["name", "description", "triggers", "content"])},
 }
+
+
+_REQUIRED_FIELDS = {"name", "description", "schema", "base_tier", "has_side_effects", "timeout_seconds", "trusted_provenance", "allowed_agents", "handler"}
+
+
+def validate_registry(registry: dict[str, dict[str, Any]] | None = None) -> None:
+    """Fail closed when a registry entry could expose trusted inputs to models."""
+    for key, tool in (registry or BASE_TOOL_REGISTRY).items():
+        missing = _REQUIRED_FIELDS - tool.keys()
+        if missing or tool.get("name") != key:
+            raise ValueError(f"Invalid tool registry entry {key}: missing {sorted(missing)}")
+        if tool["trusted_provenance"] not in {"built_in", "mcp", "external"}:
+            raise ValueError(f"Invalid tool provenance for {key}")
+        properties = tool["schema"]["function"]["parameters"].get("properties", {})
+        forbidden = RESERVED_ARGUMENTS.intersection(properties)
+        if forbidden:
+            raise ValueError(f"Tool {key} exposes trusted fields: {sorted(forbidden)}")
 
 
 def get_all_tools() -> dict[str, dict[str, Any]]:
     """Return merged registry of base native tools and discovered MCP tools."""
     tools = dict(BASE_TOOL_REGISTRY)
     discovered = mcp_manager.discover_tools()
-    tools.update(discovered)
+    for name, tool in discovered.items():
+        tool = dict(tool)
+        tool.setdefault('name', name)
+        tool.setdefault('description', tool.get('schema', {}).get('function', {}).get('description', name))
+        tool.setdefault('base_tier', 'approval_required')
+        tool.setdefault('tier', 'approval_required')
+        tool.setdefault('has_side_effects', True)
+        tool.setdefault('timeout_seconds', 5)
+        tool.setdefault('trusted_provenance', 'mcp')
+        tool.setdefault('allowed_agents', [])
+        tools[name] = tool
+    validate_registry(tools)
     return tools
 
 
@@ -93,4 +122,4 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any] | None = None) 
     args = arguments or {}
     handler = tool["handler"]
 
-    return await SandboxGuard.execute(tool_name, handler, args)
+    return await ExecutionGuard.execute(tool_name, handler, args, timeout_seconds=tool.get('timeout_seconds', 5))
