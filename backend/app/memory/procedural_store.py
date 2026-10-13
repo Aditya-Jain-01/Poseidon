@@ -111,7 +111,6 @@ class ProceduralStore:
         self._skills = []
 
         if not self.skills_dir.exists():
-            self.skills_dir.mkdir(parents=True, exist_ok=True)
             return
 
         for skill_file in sorted(self.skills_dir.glob("*.SKILL.md")):

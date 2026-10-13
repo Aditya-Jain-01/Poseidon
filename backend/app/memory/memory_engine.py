@@ -8,13 +8,18 @@ Preserves the four distinct operational tiers:
 + Background Consolidation (triggered after N turns)
 
 Callers interact through two clean methods:
-- hydrate_context(agent_id, user_id, user_text) -> list[BaseMessage]
+- hydrate_context(agent_id, user_id, user_text) -> HydratedContext
 - record_turn(user_id, user_text, reply, run_id, channel)
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+from dataclasses import dataclass
+from app.models import ConversationKey
+from app.db.connection import connection
+from app.orchestration.approval_store import canonical_json
 from pathlib import Path
 from typing import Any
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
@@ -26,26 +31,37 @@ from app.memory.procedural_store import procedural_store
 from app.soul import soul_store
 
 
+@dataclass(frozen=True)
+class HydratedContext:
+    messages: tuple[BaseMessage, ...]
+    telemetry_json: str
+
+    @property
+    def telemetry(self):
+        # Every caller receives its own copy; the stored telemetry is immutable.
+        return json.loads(self.telemetry_json)
+
+
 class SessionStore:
-    """In-memory per-user chat history for the active session."""
+    """Conversation-keyed working history; legacy strings mean the default web thread."""
+    def __init__(self):
+        self._sessions: dict[ConversationKey, list[BaseMessage]] = {}
 
-    def __init__(self) -> None:
-        self._sessions: dict[str, list[BaseMessage]] = {}
+    @staticmethod
+    def key(value):
+        return value if isinstance(value, ConversationKey) else ConversationKey(owner_id=value, channel='web', channel_account_id='local_browser', thread_id='default')
 
-    def get_history(self, user_id: str) -> list[BaseMessage]:
-        return list(self._sessions.get(user_id, []))
+    def get_history(self, key):
+        return list(self._sessions.get(self.key(key), []))
 
-    def append(self, user_id: str, human_msg: str, ai_msg: str) -> None:
-        if user_id not in self._sessions:
-            self._sessions[user_id] = []
-        self._sessions[user_id].append(HumanMessage(content=human_msg))
-        self._sessions[user_id].append(AIMessage(content=ai_msg))
+    def append(self, key, human_msg, ai_msg):
+        self._sessions.setdefault(self.key(key), []).extend([HumanMessage(content=human_msg), AIMessage(content=ai_msg)])
 
-    def clear(self, user_id: str | None = None) -> None:
-        if user_id:
-            self._sessions.pop(user_id, None)
-        else:
+    def clear(self, key=None):
+        if key is None:
             self._sessions.clear()
+        else:
+            self._sessions.pop(self.key(key), None)
 
 
 session_store = SessionStore()
@@ -64,15 +80,6 @@ class MemoryEngine:
         self.episodic_store = episodic_store
         self.semantic_store = semantic_store
         self.procedural_store = procedural_store
-        self._last_context: dict[str, Any] = {
-            "semantic_facts": [],
-            "episodic_events": [],
-            "procedural_skills": [],
-        }
-
-    def get_last_memory_context(self) -> dict[str, Any]:
-        """Return the structured memory slices retrieved during the most recent hydration."""
-        return dict(self._last_context)
 
     def _format_episodic(self, events: list[dict[str, Any]]) -> str:
         if not events:
@@ -139,7 +146,8 @@ class MemoryEngine:
         agent_id: str = "poseidon",
         user_id: str = "local_user",
         user_text: str = "",
-    ) -> list[BaseMessage]:
+        conversation_key: ConversationKey | None = None,
+    ) -> HydratedContext:
         """Assemble Working Memory context for an agent turn.
 
         Retrieves episodic, semantic, and procedural memories, binds the agent persona,
@@ -149,11 +157,13 @@ class MemoryEngine:
 
         episodic_events = self.episodic_store.retrieve(user_id=user_id, query=user_text) or []
         episodic_block = self._format_episodic(episodic_events)
-        semantic_block = self._format_semantic(user_id=user_id, user_text=user_text)
-        procedural_block = self._format_procedural(user_text=user_text)
+        semantic_facts = self._get_raw_semantic(user_id, user_text)
+        semantic_block = '## Recalled Facts & User Profile (Semantic Memory):\n' + '\n'.join(f'- {fact}' for fact in semantic_facts) if semantic_facts else ''
+        skills = self.procedural_store.retrieve(task_query=user_text) or []
+        procedural_block = '## Active Procedural Playbooks (Skills):\n' + '\n\n'.join(str(skill) for skill in skills) if skills else ''
 
-        self._last_context = {
-            "semantic_facts": self._get_raw_semantic(user_id, user_text),
+        telemetry = {
+            "semantic_facts": semantic_facts,
             "episodic_events": [
                 {
                     "role": ev.get("role", "user"),
@@ -162,7 +172,7 @@ class MemoryEngine:
                 }
                 for ev in episodic_events
             ],
-            "procedural_skills": self._get_raw_procedural(user_text),
+            "procedural_skills": [skill.get('name', str(skill)) if isinstance(skill, dict) else getattr(skill, 'name', str(skill)) for skill in skills],
         }
 
         memory_blocks = [b for b in [procedural_block, semantic_block, episodic_block] if b]
@@ -180,12 +190,20 @@ class MemoryEngine:
         else:
             full_system_prompt = persona
 
-        history = self.session_store.get_history(user_id)
-        return [
+        key = conversation_key or self.session_store.key(user_id)
+        history = self.session_store.get_history(key)
+        if conversation_key is not None:
+            # Durable completed conversations survive application reconstruction.
+            self.episodic_store.init_db()
+            with connection(self.episodic_store.db_path) as conn:
+                turns = conn.execute('SELECT user_text,reply FROM completed_turns WHERE conversation_key_json=? ORDER BY created_at, rowid', (canonical_json(key.model_dump()),)).fetchall()
+            history = [message for row in turns for message in (HumanMessage(content=row['user_text']), AIMessage(content=row['reply']))]
+        messages = [
             SystemMessage(content=full_system_prompt),
             *history,
             HumanMessage(content=user_text),
         ]
+        return HydratedContext(tuple(messages), json.dumps(telemetry))
 
     def record_turn(
         self,
@@ -194,18 +212,26 @@ class MemoryEngine:
         reply: str,
         run_id: str,
         channel: str = "web",
+        conversation_key: ConversationKey | None = None,
     ) -> None:
         """Persist exchange to Working Memory session and Episodic store."""
-        self.session_store.append(user_id, user_text, reply)
+        key = conversation_key or self.session_store.key(user_id)
+        self.episodic_store.init_db()
+        with connection(self.episodic_store.db_path) as conn:
+            if conn.execute('SELECT 1 FROM completed_turns WHERE run_id=?', (run_id,)).fetchone():
+                return
 
-        self.episodic_store.log_exchange(
+        recorded = self.episodic_store.record_completed_turn(
+            conversation_key_json=canonical_json(key.model_dump()),
             user_id=user_id,
-            human_msg=user_text,
-            ai_msg=reply,
+            user_text=user_text,
+            reply=reply,
             channel=channel,
             run_id=run_id,
         )
-
+        if not recorded:
+            return
+        self.session_store.append(key, user_text, reply)
         self._maybe_trigger_consolidation(user_id)
 
     def _maybe_trigger_consolidation(self, user_id: str) -> None:

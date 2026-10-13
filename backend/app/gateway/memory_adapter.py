@@ -8,7 +8,9 @@
 """
 
 from typing import Any
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
+from app.models import ActorContext
+from app.security.identity import resolve_actor
 from pydantic import BaseModel, Field
 
 from app.memory.semantic_store import semantic_store
@@ -30,8 +32,10 @@ async def get_semantic_memory(
     category: str | None = Query(default=None, description="Optional category filter (preference, profile, relationship, general)"),
     query: str | None = Query(default=None, description="Optional search query keyword"),
     limit: int = Query(default=50, ge=1, le=200, description="Max facts to return"),
+    actor: ActorContext = Depends(resolve_actor),
 ) -> dict[str, Any]:
-    """Retrieve active semantic facts for a user."""
+    """Retrieve active semantic facts for the trusted owner."""
+    user_id = actor.owner_id
     if query:
         facts = semantic_store.retrieve(user_id=user_id, query=query, limit=limit)
     else:
@@ -51,8 +55,10 @@ async def get_episodic_memory(
     since: str | None = Query(default=None, description="ISO timestamp to filter events since"),
     query: str | None = Query(default=None, description="Optional keyword search query"),
     limit: int = Query(default=50, ge=1, le=200, description="Max events to return"),
+    actor: ActorContext = Depends(resolve_actor),
 ) -> dict[str, Any]:
-    """Retrieve chronological episodic events for a user."""
+    """Retrieve chronological episodic events for the trusted owner."""
+    user_id = actor.owner_id
     if query:
         events = episodic_store.search_relevant(user_id=user_id, query=query, limit=limit)
     else:
@@ -98,9 +104,10 @@ async def get_procedural_memory(
 @router.post("/consolidate")
 async def trigger_consolidation_endpoint(
     req: ConsolidateRequest | None = None,
+    actor: ActorContext = Depends(resolve_actor),
 ) -> dict[str, Any]:
     """Trigger memory consolidation for unconsolidated episodic entries."""
-    user_id = req.user_id if req else "local_user"
+    user_id = actor.owner_id
     force = req.force if req else True
 
     result = await check_and_trigger_consolidation(user_id=user_id, force=force)
@@ -110,8 +117,10 @@ async def trigger_consolidation_endpoint(
 @router.get("/status")
 async def get_memory_status(
     user_id: str = Query(default="local_user", description="User ID"),
+    actor: ActorContext = Depends(resolve_actor),
 ) -> dict[str, Any]:
-    """Get high-level summary of memory stores and consolidation status."""
+    """Get high-level summary for the trusted owner."""
+    user_id = actor.owner_id
     consolidation_info = get_consolidation_status(user_id=user_id)
     return {
         "user_id": user_id,

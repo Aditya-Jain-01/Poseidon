@@ -14,6 +14,7 @@ from langchain_core.messages import BaseMessage, SystemMessage
 
 from app.soul import soul_store
 from app.llm_providers import llm_provider
+from app.security.secrets import redact
 
 
 class AgentResult(dict):
@@ -164,7 +165,7 @@ async def call(
     try:
         response = await client.chat.completions.create(**kwargs)
     except Exception as e:
-        err_text = str(e)
+        err_text = redact(str(e))
         if "Connection" in err_text or "connect" in err_text.lower() or "11434" in err_text:
             if preset == "local" or "11434" in base_url or "localhost" in base_url:
                 raise RuntimeError(

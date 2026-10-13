@@ -21,6 +21,8 @@ from pydantic import BaseModel
 from app.config import settings
 from app.orchestration.graph import run_agent
 from app.orchestration.state import InboundEvent
+from app.models import ConversationKey
+from app.security.identity import telegram_actor
 from app.security.taint import is_channel_untrusted
 
 
@@ -39,7 +41,7 @@ def is_user_allowed(sender_id: str | int) -> bool:
     """Check if the sender is authorized to talk to this local agent."""
     allowed = get_allowed_user_ids()
     if not allowed:
-        return True
+        return False
     return str(sender_id) in allowed
 
 
@@ -76,19 +78,23 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
         print(f"[TelegramAdapter] Dropped message from unauthorized user ID: {sender_id}")
         return {"status": "rejected", "reason": f"Unauthorized user: {sender_id}"}
 
-    user_id = f"telegram_{sender_id}"
+    if chat_id is None or sender_id is None:
+        return {'status': 'rejected', 'reason': 'Missing verified Telegram identifiers'}
+    actor = telegram_actor(sender_id)
+    key = ConversationKey(owner_id=actor.owner_id, channel='telegram', channel_account_id=f'telegram_{sender_id}', thread_id=f"chat_{chat_id}:thread_{message.get('message_thread_id', 'default')}")
+    user_id = actor.owner_id
     token = bot_token or getattr(settings, "telegram_bot_token", "")
 
     from app.orchestration.approval_store import approval_store
     from app.orchestration.graph import resume_approval
 
-    pending = approval_store.get_pending_for_user(user_id)
+    pending = approval_store.get_pending_for_user(user_id, key)
     if pending:
         clean = text.strip().lower()
         pin = getattr(settings, "poseidon_operator_pin", "").strip()
 
         if clean in {"/deny", "deny", "no", "cancel", "reject", "abort"}:
-            res = await resume_approval(pending["id"], "denied")
+            res = await resume_approval(pending["id"], "denied", owner_id=actor.owner_id, conversation_key=key)
             reply_text = res.get("reply", "Action denied. No changes were made.")
             if token and chat_id:
                 await send_telegram_reply(token, chat_id, reply_text)
@@ -113,7 +119,7 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
                 approved = True
 
         if approved:
-            res = await resume_approval(pending["id"], "approved")
+            res = await resume_approval(pending["id"], "approved", owner_id=actor.owner_id, conversation_key=key)
             reply_text = res.get("reply", "Action approved and executed.")
             if token and chat_id:
                 await send_telegram_reply(token, chat_id, reply_text)
@@ -121,9 +127,8 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
 
     tainted = is_channel_untrusted("telegram")
     event = InboundEvent(
-        user_id=user_id,
-        channel="telegram",
-        channel_thread_id=f"telegram_{chat_id}",
+        actor=actor,
+        conversation_key=key,
         text=text,
         timestamp=datetime.now(timezone.utc),
         is_tainted=tainted,

@@ -7,15 +7,20 @@ everything downstream only see InboundEvent.
 
 from datetime import datetime, timezone
 from typing import Any
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter
+import logging
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.orchestration.graph import run_agent, resume_approval
 from app.orchestration.state import InboundEvent
-from app.security.taint import is_channel_untrusted, calculate_overall_risk
+from app.models import ActorContext, ConversationKey, Identifier
+from app.security.identity import resolve_actor
+from app.security.secrets import redact
+from app.security.taint import calculate_overall_risk
 from app.security.risk_analyzer import RiskAnalyzer
 
 
@@ -24,6 +29,7 @@ class ChatRequest(BaseModel):
     text: str
     user_id: str = Field(default="local_user")
     channel: str = Field(default="web")
+    thread_id: Identifier | None = None
 
 
 class ChatResponse(BaseModel):
@@ -34,11 +40,13 @@ class ChatResponse(BaseModel):
     active_agent: str = "poseidon"
     memory_context: dict[str, Any] | None = None
     trajectory: list[dict[str, Any]] | None = None
+    thread_id: str
+    conversation_key: ConversationKey
 
 
 class ApprovalDecisionRequest(BaseModel):
-    approval_id: str
-    decision: str
+    approval_id: Identifier
+    decision: Literal['approved', 'denied']
 
 
 class ToolInspectRequest(BaseModel):
@@ -53,18 +61,19 @@ router = APIRouter()
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
-    risk_info = calculate_overall_risk(req.channel, req.text)
+async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends(resolve_actor)):
+    risk_info = calculate_overall_risk('web', req.text)
     tainted = risk_info["is_tainted"]
     event = InboundEvent(
-        user_id=req.user_id,
-        channel=req.channel,
-        channel_thread_id=f"{req.channel}_{req.user_id}",
+        actor=actor,
+        conversation_key=ConversationKey(owner_id=actor.owner_id, channel='web', channel_account_id='local_browser', thread_id=req.thread_id or 'default'),
         text=req.text,
         timestamp=datetime.now(timezone.utc),
         is_tainted=tainted,
-        taint_sources=[req.channel] if is_channel_untrusted(req.channel) else (["content_risk"] if tainted else []),
+        taint_sources=["content_risk"] if tainted else [],
     )
+    if req.thread_id is None:
+        logging.getLogger(__name__).warning('Chat without thread_id is deprecated; using compatibility default thread')
 
     run_id = str(uuid4())
     try:
@@ -72,21 +81,21 @@ async def chat(req: ChatRequest):
     except Exception as e:
         return JSONResponse(
             status_code=502,
-            content={"error": type(e).__name__, "detail": str(e), "run_id": run_id},
+            content={"error": type(e).__name__, "detail": redact(str(e)), "run_id": run_id},
         )
 
     return ChatResponse(**result)
 
 
 @router.post("/chat/approve")
-async def approve(req: ApprovalDecisionRequest):
+async def approve(req: ApprovalDecisionRequest, actor: ActorContext = Depends(resolve_actor)):
     """Resolve a real pending tool action. Silence never executes the action."""
     try:
-        return await resume_approval(req.approval_id, req.decision)
+        return await resume_approval(req.approval_id, req.decision, owner_id=actor.owner_id)
     except KeyError as exc:
-        return JSONResponse(status_code=404, content={"error": str(exc)})
+        return JSONResponse(status_code=404, content={"error": redact(str(exc))})
     except ValueError as exc:
-        return JSONResponse(status_code=422, content={"error": str(exc)})
+        return JSONResponse(status_code=422, content={"error": redact(str(exc))})
 
 
 @router.post("/security/inspect-tool")
@@ -98,4 +107,4 @@ async def inspect_tool(req: ToolInspectRequest):
         is_tainted=req.is_tainted,
         original_values=req.original_values,
     )
-    return analysis
+    return redact(analysis)

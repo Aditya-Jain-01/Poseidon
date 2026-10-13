@@ -26,7 +26,6 @@ def _get_agents_dir() -> Path:
         path = Path(settings.agents_dir)
     else:
         path = Path(settings.poseidon_db_path).parent / "agents"
-    path.mkdir(parents=True, exist_ok=True)
     return path
 
 
@@ -219,6 +218,7 @@ class SoulStore:
         file_content = _dump_frontmatter(metadata, personality)
 
         target_file = _get_agents_dir() / f"{agent_id}.soul.md"
+        target_file.parent.mkdir(parents=True, exist_ok=True)
         target_file.write_text(file_content, encoding="utf-8")
 
         self.load_all_agents(force_reload=True)

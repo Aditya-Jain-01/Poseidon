@@ -1,386 +1,265 @@
-"""Bounded agent execution harness with LangGraph approval pauses and resumption."""
+"""Injected, checkpointed LangGraph runtime with native interrupt/resume."""
 from __future__ import annotations
-
+import asyncio
+from dataclasses import dataclass, field
 import json
-from typing import Any
+from typing import Any, Callable
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
-
+from langgraph.types import Command, interrupt
 from app.agents import qa_agent
 from app.config import settings
+from app.models import InboundEvent, ConversationKey, ToolCall, ApprovalDecision, RunResult
 from app.memory.memory_engine import memory_engine
-from app.orchestration.approval_store import approval_store
-from app.orchestration.state import AgentState, InboundEvent
+from app.orchestration.approval_store import ApprovalStore, ExecutionStore
+from app.orchestration.state import AgentState
 from app.orchestration.trajectory import trajectory_store
-from app.security.dlp import DLPScanner
-from app.security.note_guard import SuspiciousNoteError
+from app.security.note_guard import NoteGuard
 from app.security.risk_analyzer import RiskAnalyzer
+from app.security.secrets import redact
 from app.security.taint import is_channel_untrusted
 from app.tools.registry import execute_tool, get_tier, get_tools_for_agent
 
-
-# Fallback when no routing signal matches; all unrouted messages go to Poseidon
-DEFAULT_PRIMARY_AGENT = "poseidon"
+DEFAULT_PRIMARY_AGENT = 'poseidon'
 
 
-async def agent_node(state: AgentState) -> dict:
-    if state["iteration_count"] >= settings.poseidon_max_iterations:
-        return {
-            "messages": [AIMessage(content="I stopped because this request exceeded the configured execution limit.")],
-            "current_tool_call": None,
-        }
-    agent = state.get("active_agent") or DEFAULT_PRIMARY_AGENT
-    tools = get_tools_for_agent(agent)
-    result = await qa_agent.call(agent, state["messages"], tools=tools)
-    calls = result.get("tool_calls") or []
-    trajectory_store.record(state["run_id"], "agent", agent_id=agent, tool_calls=len(calls))
+@dataclass
+class HarnessServices:
+    memory: Any = field(default_factory=lambda: memory_engine)
+    approvals: ApprovalStore = field(default_factory=ApprovalStore)
+    executions: ExecutionStore | None = None
+    llm_call: Callable | None = None
+    tool_executor: Callable | None = None
+    tool_schemas: Callable | None = None
+    tool_tier: Callable | None = None
 
-    message = AIMessage(
-        content=result.get("content") or "",
-        tool_calls=[
-            {"name": c["name"], "args": c.get("arguments", {}), "id": c.get("id", c["name"]), "type": "tool_call"}
-            for c in calls
-        ],
-    )
-    return {
-        "messages": [message],
-        "iteration_count": state["iteration_count"] + 1,
-        "current_tool_call": calls[0] if calls else None,
-    }
+    def __post_init__(self):
+        if self.executions is None:
+            self.executions = ExecutionStore(self.approvals.db_path)
 
 
-def next_step(state: AgentState) -> str:
-    """Conditional edge: decides whether to execute, gate, or terminate.
-
-    Tool tiers (auto / guarded_auto / approval_required) control the
-    branching — this is the single enforcement point for the security
-    policy defined in registry.py and GUARDRAILS.md.
-    """
-    if not state.get("current_tool_call"):
-        return "end"
-    if state["tool_call_count"] >= settings.poseidon_max_tool_calls:
-        return "limit"
-    tier = get_tier(state["current_tool_call"]["name"])
-    if tier == "approval_required":
-        return "approval"
-    if tier == "guarded_auto":
-        return "guarded"
-    return "execute"
+def _allowed(services, agent_id, name):
+    schemas = (services.tool_schemas or get_tools_for_agent)(agent_id)
+    return name in {s['function']['name'] for s in schemas}
 
 
-async def approval_gate(state: AgentState) -> dict:
-    call = state["current_tool_call"]
-    analysis = RiskAnalyzer.analyze_tool_call(call["name"], call.get("arguments", {}), state["is_tainted"])
-    request = approval_store.park(
-        state["run_id"],
-        call,
-        {
-            "active_agent": state.get("active_agent", DEFAULT_PRIMARY_AGENT),
-            "user_id": state["user_id"],
-            "channel": state["channel"],
-            "messages": state["messages"],
-            "iteration_count": state["iteration_count"],
-            "tool_call_count": state["tool_call_count"],
-            "is_tainted": state["is_tainted"],
-            "taint_sources": state["taint_sources"],
-            "tool_results": state["tool_results"],
-        },
-    )
-    request.update(analysis)
-    trajectory_store.record(
-        state["run_id"],
-        "approval_requested",
-        agent_id=state["active_agent"],
-        tool_name=call["name"],
-        tool_args=call.get("arguments", {}),
-        risk_level=analysis["risk_level"],
-    )
-    return {"pending_approvals": [request], "approval_status": "pending"}
+def _tool_message(call, result):
+    return ToolMessage(content=json.dumps(result, default=str), tool_call_id=call['id'], name=call['name'], id=f"result:{call['id']}")
 
 
-async def tool_executor(state: AgentState) -> dict:
-    call = state["current_tool_call"]
-    try:
-        result = await execute_tool(call["name"], call.get("arguments", {}))
-    except Exception as exc:
-        result = {"error": str(exc)}
-
-    trajectory_store.record(
-        state["run_id"],
-        "tool_executed",
-        agent_id=state["active_agent"],
-        tool_name=call["name"],
-        tool_args=call.get("arguments", {}),
-        tool_result=result,
-        risk_level=get_tier(call["name"]),
-    )
-    return {
-        "messages": [
-            ToolMessage(
-                content=json.dumps(result, default=str),
-                tool_call_id=call.get("id", call["name"]),
-                name=call["name"],
-            )
-        ],
-        "tool_results": [*state["tool_results"], {"tool_name": call["name"], "result": result}],
-        "tool_call_count": state["tool_call_count"] + 1,
-        "current_tool_call": None,
-    }
+def _finish_call(state, result):
+    call = state['current_tool_call']
+    return {'messages': [_tool_message(call, result)], 'tool_results': [*state['tool_results'], {'tool_call_id': call['id'], 'tool_name': call['name'], 'result': result}],
+            'tool_call_count': state['tool_call_count'] + 1, 'current_tool_call': None, 'approval_status': '', 'policy_decision': {}}
 
 
-async def guarded_tool_executor(state: AgentState) -> dict:
-    """Execute a guarded_auto tool (e.g. notes_reminders_create).
+def build_graph(checkpointer, services):
+    """Every runtime receives its saver and dependencies explicitly."""
+    if checkpointer is None:
+        raise ValueError('A checkpointer is required; tests must inject a deliberate saver')
 
-    On SuspiciousNoteError the call is transparently re-routed to the
-    approval_gate — the operator sees an ApprovalCard just as they would
-    for a native approval_required tool.  On success it behaves exactly
-    like the regular tool_executor.
-    """
-    call = state["current_tool_call"]
-    call_args = dict(call.get("arguments", {}))
-    # Strip internal override to prevent prompt injection from bypassing security
-    call_args.pop("_operator_approved", None)
-    try:
-        result = await execute_tool(call["name"], call_args)
-    except SuspiciousNoteError as exc:
-        # Transparently escalate to the approval gate.  Annotate the parked
-        # request so the UI can surface a 'Suspicious note' label.
-        suspicious_call = dict(call)
-        suspicious_call.setdefault("arguments", {})
-        suspicious_state = {
-            **state,
-            "current_tool_call": {
-                **suspicious_call,
-                "_suspicious_note": True,
-                "_suspicious_reasons": exc.reasons,
-            },
-        }
-        trajectory_store.record(
-            state["run_id"],
-            "suspicious_note_escalated",
-            agent_id=state["active_agent"],
-            tool_name=call["name"],
-            tool_args=call.get("arguments", {}),
-            risk_level="medium",
-        )
-        return await approval_gate(suspicious_state)
-    except Exception as exc:
-        result = {"error": str(exc)}
+    async def agent_node(state):
+        if state['iteration_count'] >= settings.poseidon_max_iterations:
+            return {'messages': [AIMessage(content='I stopped because this request exceeded the configured execution limit.')], 'pending_tool_calls': [], 'current_tool_call': None}
+        result = await (services.llm_call or qa_agent.call)(state['active_agent'], state['messages'], tools=(services.tool_schemas or get_tools_for_agent)(state['active_agent']))
+        calls = []
+        for call in result.get('tool_calls') or []:
+            calls.append(ToolCall.model_validate(call).model_dump())
+        if len({c['id'] for c in calls}) != len(calls):
+            raise ValueError('Duplicate tool-call IDs in a model response')
+        previous_ids = {r['tool_call_id'] for r in state['tool_results']}
+        if previous_ids.intersection(c['id'] for c in calls):
+            raise ValueError('Tool-call IDs must be unique within a run')
+        message = AIMessage(content=result.get('content') or '', tool_calls=[{'id': c['id'], 'name': c['name'], 'args': c['arguments'], 'type': 'tool_call'} for c in calls])
+        trajectory_store.record(state['run_id'], 'agent', agent_id=state['active_agent'], conversation_key=state['conversation_key'], tool_calls=len(calls))
+        return {'messages': [message], 'iteration_count': state['iteration_count'] + 1, 'pending_tool_calls': calls, 'current_tool_call': None}
 
-    trajectory_store.record(
-        state["run_id"],
-        "tool_executed",
-        agent_id=state["active_agent"],
-        tool_name=call["name"],
-        tool_args=call.get("arguments", {}),
-        tool_result=result,
-        risk_level=get_tier(call["name"]),
-    )
-    return {
-        "messages": [
-            ToolMessage(
-                content=json.dumps(result, default=str),
-                tool_call_id=call.get("id", call["name"]),
-                name=call["name"],
-            )
-        ],
-        "tool_results": [*state["tool_results"], {"tool_name": call["name"], "result": result}],
-        "tool_call_count": state["tool_call_count"] + 1,
-        "current_tool_call": None,
-    }
+    async def select_call(state):
+        queue = list(state.get('pending_tool_calls', []))
+        if not queue:
+            return {'current_tool_call': None}
+        if state['tool_call_count'] >= settings.poseidon_max_tool_calls:
+            # Close the model protocol for every unexecuted call before stopping.
+            result = {'error': 'tool_call_limit', 'detail': 'Configured tool-call limit reached'}
+            return {'messages': [*[_tool_message(c, result) for c in queue], AIMessage(content='I stopped because this request exceeded the configured tool-call limit.')],
+                    'tool_results': [*state['tool_results'], *[{'tool_call_id': c['id'], 'tool_name': c['name'], 'result': result} for c in queue]],
+                    'pending_tool_calls': [], 'current_tool_call': None, 'policy_decision': {'decision': 'limit'}}
+        call = queue.pop(0)
+        if not _allowed(services, state['active_agent'], call['name']):
+            policy = {'decision': 'deny', 'reasons': ['Unknown tool or agent lacks permission']}
+        else:
+            tier = (services.tool_tier or get_tier)(call['name'])
+            policy = {'decision': 'require_approval' if tier == 'approval_required' else 'allow', 'reasons': []}
+            if tier == 'guarded_auto' and call['name'] == 'notes_reminders_create':
+                verdict = NoteGuard.inspect(call['arguments'].get('text', ''))
+                if verdict.verdict == 'reject':
+                    policy = {'decision': 'deny', 'reasons': verdict.reasons}
+                elif verdict.verdict == 'suspicious':
+                    policy = {'decision': 'require_approval', 'reasons': verdict.reasons}
+        return {'pending_tool_calls': queue, 'current_tool_call': call, 'policy_decision': policy, 'approval_status': ''}
+
+    def route_call(state):
+        if not state.get('current_tool_call'):
+            return 'limit' if state.get('policy_decision', {}).get('decision') == 'limit' else 'end'
+        return 'approval' if state['policy_decision']['decision'] == 'require_approval' else 'execute'
+
+    async def approval_gate(state):
+        call = state['current_tool_call']
+        request = services.approvals.park(state['run_id'], call, state)
+        request.update(redact(RiskAnalyzer.analyze_tool_call(call['name'], call['arguments'], state['is_tainted'])))
+        request['reasons'] = redact(state['policy_decision'].get('reasons', []))
+        # LangGraph replays this node on resume. Persisting the request is idempotent;
+        # all tool side effects occur in the following node, after the interrupt.
+        decision = ApprovalDecision.model_validate(interrupt(request))
+        if decision.approval_id != request['id']:
+            raise ValueError('Resume decision does not match the interrupted approval')
+        row = services.approvals.get(request['id'])
+        services.approvals.validate(row, state['user_id'], call, state['conversation_key'])
+        if row['status'] not in {decision.decision, 'consumed' if decision.decision == 'approved' else 'denied'}:
+            raise ValueError('Approval decision was not resolved by the trusted endpoint')
+        if not _allowed(services, state['active_agent'], call['name']):
+            return {'approval_status': 'denied', 'policy_decision': {'decision': 'deny', 'reasons': ['Agent permission revoked']}}
+        return {'approval_status': decision.decision, 'pending_approvals': []}
+
+    async def tool_executor(state):
+        call = state['current_tool_call']
+        if state['policy_decision']['decision'] == 'deny' or state.get('approval_status') == 'denied':
+            return _finish_call(state, {'error': 'denied', 'detail': 'Action denied. No changes were made.'})
+        if not _allowed(services, state['active_agent'], call['name']):
+            return _finish_call(state, {'error': 'permission_denied'})
+        if state['tool_call_count'] >= settings.poseidon_max_tool_calls:
+            return _finish_call(state, {'error': 'tool_call_limit'})
+        previous = services.executions.get(state['run_id'], call)
+        if previous and previous['status'] in {'completed', 'failed'}:
+            return _finish_call(state, json.loads(previous['result_json']))
+        if state.get('approval_status') == 'approved':
+            request = services.approvals.park(state['run_id'], call, state)
+            services.approvals.consume(request['id'], state['user_id'], call, state['conversation_key'])
+        if not services.executions.claim(state['run_id'], call):
+            previous = services.executions.get(state['run_id'], call)
+            result = json.loads(previous['result_json']) if previous and previous['result_json'] else {'error': 'execution_uncertain', 'detail': 'An earlier execution has no durable terminal result; it will not be repeated automatically.'}
+            return _finish_call(state, result)
+        arguments = dict(call['arguments'])
+        # Legacy NoteGuard expects this internal flag. It is never model-visible.
+        if call['name'] == 'notes_reminders_create' and state.get('approval_status') == 'approved':
+            arguments['_operator_approved'] = True
+        try:
+            result = await (services.tool_executor or execute_tool)(call['name'], arguments)
+            result = json.loads(json.dumps(result, default=str))
+        except Exception as exc:
+            result = {'error': type(exc).__name__, 'detail': redact(str(exc))}
+        result = redact(result)
+        services.executions.complete(state['run_id'], call, result)
+        trajectory_store.record(state['run_id'], 'tool_executed', agent_id=state['active_agent'], conversation_key=state['conversation_key'], tool_name=call['name'], tool_result=result)
+        return _finish_call(state, result)
+
+    def after_tool(state):
+        return 'select' if state.get('pending_tool_calls') else 'agent'
+
+    builder = StateGraph(AgentState)
+    builder.add_node('agent', agent_node)
+    builder.add_node('select', select_call)
+    builder.add_node('approval', approval_gate)
+    builder.add_node('execute', tool_executor)
+    builder.add_edge(START, 'agent')
+    builder.add_conditional_edges('agent', lambda s: 'select' if s.get('pending_tool_calls') else 'end', {'select': 'select', 'end': END})
+    builder.add_conditional_edges('select', route_call, {'approval': 'approval', 'execute': 'execute', 'end': END, 'limit': END})
+    builder.add_edge('approval', 'execute')
+    builder.add_conditional_edges('execute', after_tool, {'select': 'select', 'agent': 'agent'})
+    return builder.compile(checkpointer=checkpointer)
 
 
-async def limit_node(state: AgentState) -> dict:
-    return {
-        "messages": [AIMessage(content="I stopped because this request exceeded the configured tool-call limit.")],
-        "current_tool_call": None,
-    }
+class HarnessRuntime:
+    def __init__(self, checkpointer, services=None):
+        self.services = services or HarnessServices()
+        self.graph = build_graph(checkpointer, self.services)
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def lock(self, run_id):
+        return self._locks.setdefault(run_id, asyncio.Lock())
+
+    @staticmethod
+    def config(run_id):
+        return {'configurable': {'thread_id': run_id}, 'recursion_limit': 20 + settings.poseidon_max_iterations * (settings.poseidon_max_tool_calls + 2) * 5}
+
+    async def reconcile_approvals(self):
+        for request in self.services.approvals.pending():
+            snapshot = await self.graph.aget_state(self.config(request['run_id']))
+            if not snapshot.next or not snapshot.values:
+                self.services.approvals.invalidate(request['approval_id'])
 
 
-# Graph topology: agent → (execute | guarded | approval | limit | end)
-# Execution and guarded nodes loop back to agent for the next LLM turn;
-# approval and limit are terminal — the graph yields and the response
-# is returned with a pending approval request (or a hard stop message).
-_builder = StateGraph(AgentState)
-_builder.add_node("agent", agent_node)
-_builder.add_node("tool_executor", tool_executor)
-_builder.add_node("guarded_tool_executor", guarded_tool_executor)
-_builder.add_node("approval_gate", approval_gate)
-_builder.add_node("limit", limit_node)
-
-_builder.add_edge(START, "agent")
-_builder.add_conditional_edges("agent", next_step, {
-    "end": END,
-    "approval": "approval_gate",
-    "execute": "tool_executor",
-    "guarded": "guarded_tool_executor",
-    "limit": "limit",
-})
-_builder.add_edge("tool_executor", "agent")
-_builder.add_edge("guarded_tool_executor", "agent")
-_builder.add_edge("approval_gate", END)
-_builder.add_edge("limit", END)
-graph = _builder.compile()
+_runtime: HarnessRuntime | None = None
 
 
-def _initial_state(event: InboundEvent, run_id: str, agent_id: str = DEFAULT_PRIMARY_AGENT) -> AgentState:
+def set_runtime(runtime):
+    """Application lifespan (or a deliberate test fixture) installs the runtime."""
+    global _runtime
+    _runtime = runtime
+
+
+def get_runtime(runtime=None):
+    resolved = runtime or _runtime
+    if resolved is None:
+        raise RuntimeError('Harness runtime is unavailable; start the application lifespan')
+    return resolved
+
+
+def _initial_state(event, run_id, agent_id, services):
+    hydrated = services.memory.hydrate_context(agent_id=agent_id, user_id=event.user_id, user_text=event.text, conversation_key=event.conversation_key)
     tainted = event.is_tainted or is_channel_untrusted(event.channel)
-    sources = list(event.taint_sources)
-    if tainted and event.channel not in sources:
-        sources.append(event.channel)
-
-    messages = memory_engine.hydrate_context(agent_id=agent_id, user_id=event.user_id, user_text=event.text)
-
-    return {
-        "messages": messages,
-        "user_id": event.user_id,
-        "channel": event.channel,
-        "run_id": run_id,
-        "iteration_count": 0,
-        "tool_call_count": 0,
-        "is_tainted": tainted,
-        "taint_sources": sources,
-        "pending_approvals": [],
-        "active_agent": agent_id,
-        "tool_results": [],
-        "approval_status": "none",
-        "current_tool_call": None,
-    }
+    return {'messages': list(hydrated.messages), 'user_id': event.user_id, 'channel': event.channel, 'run_id': run_id,
+            'conversation_key': event.conversation_key.model_dump(), 'actor': event.actor.model_dump(), 'user_text': event.text,
+            'iteration_count': 0, 'tool_call_count': 0, 'is_tainted': tainted,
+            'taint_sources': list(dict.fromkeys([*event.taint_sources, *([event.channel] if tainted else [])])),
+            'pending_approvals': [], 'active_agent': agent_id, 'tool_results': [], 'approval_status': '',
+            'current_tool_call': None, 'pending_tool_calls': [], 'memory_context': hydrated.telemetry, 'policy_decision': {}}
 
 
-async def run_agent(event: InboundEvent, run_id: str, agent_id: str | None = None) -> dict[str, Any]:
-    """Execute one full turn of the agent harness."""
-    if not agent_id:
-        from app.orchestration.router import route_request
-        agent_id = route_request(event.text, default_agent=DEFAULT_PRIMARY_AGENT)
-
-    trajectory_store.record(run_id, "route", agent_id=agent_id)
-    result = await graph.ainvoke(_initial_state(event, run_id, agent_id))
-    pending = result.get("pending_approvals", [])
-    raw = "Awaiting your approval to continue." if pending else str(result["messages"][-1].content)
-    # DLP scan redacts secrets/PII before the reply leaves the harness
-    safe = DLPScanner.scan_and_redact(raw).sanitized_text
-
-    if not pending:
-        memory_engine.record_turn(
-            user_id=event.user_id,
-            user_text=event.text,
-            reply=safe,
-            run_id=run_id,
-            channel=event.channel,
-        )
-
-    return {
-        "reply": safe,
-        "run_id": run_id,
-        "active_agent": result.get("active_agent", agent_id),
-        "approval_request": pending[0] if pending else None,
-        "memory_context": memory_engine.get_last_memory_context(),
-        "trajectory": trajectory_store.get(run_id),
-    }
+def _response(result, runtime):
+    interrupts = result.get('__interrupt__', ())
+    request = redact(interrupts[0].value) if interrupts else None
+    safe = 'Awaiting your approval to continue.' if request else redact(str(result['messages'][-1].content))
+    key = ConversationKey.model_validate(result['conversation_key'])
+    if request is None:
+        runtime.services.memory.record_turn(user_id=result['user_id'], user_text=result['user_text'], reply=safe, run_id=result['run_id'], channel=result['channel'], conversation_key=key)
+    return RunResult(reply=safe, run_id=result['run_id'], active_agent=result['active_agent'], thread_id=key.thread_id,
+                     conversation_key=key, approval_request=request, memory_context=result['memory_context'], trajectory=trajectory_store.get(result['run_id'])).model_dump()
 
 
-async def resume_approval(approval_id: str, decision: str) -> dict[str, Any]:
-    """Resume a pending tool action. Re-enters LangGraph upon approval."""
-    request = approval_store.resolve(approval_id, decision)
-    context = request["context"]
-    agent_id = context.get("active_agent", DEFAULT_PRIMARY_AGENT)
+async def run_agent(event: InboundEvent, run_id: str, agent_id=DEFAULT_PRIMARY_AGENT, *, runtime=None):
+    runtime = get_runtime(runtime)
+    async with runtime.lock(run_id):
+        config = runtime.config(run_id)
+        snapshot = await runtime.graph.aget_state(config)
+        if snapshot.values:
+            if snapshot.values['conversation_key'] != event.conversation_key.model_dump() or snapshot.values['user_text'] != event.text or snapshot.values['active_agent'] != agent_id:
+                raise ValueError('Run ID already belongs to another request')
+            result = await runtime.graph.ainvoke(None, config) if snapshot.next else snapshot.values
+        else:
+            trajectory_store.record(run_id, 'route', agent_id=agent_id, conversation_key=event.conversation_key.model_dump())
+            result = await runtime.graph.ainvoke(_initial_state(event, run_id, agent_id, runtime.services), config)
+        return _response(result, runtime)
 
-    trajectory_store.record(
-        request["run_id"],
-        "approval_resolved",
-        agent_id=agent_id,
-        tool_name=request["tool_name"],
-        decision=decision,
-    )
 
-    if decision == "denied":
-        user_text = next(
-            (str(m.content) for m in reversed(context.get("messages", [])) if getattr(m, "type", "") in {"human", "user"}),
-            "Cancel action",
-        )
-        memory_engine.record_turn(
-            user_id=context["user_id"],
-            user_text=user_text,
-            reply="Action denied. No changes were made.",
-            run_id=request["run_id"],
-            channel=context.get("channel", "web"),
-        )
-        return {
-            "reply": "Action denied. No changes were made.",
-            "run_id": request["run_id"],
-            "active_agent": agent_id,
-            "approval_request": None,
-            "memory_context": memory_engine.get_last_memory_context(),
-            "trajectory": trajectory_store.get(request["run_id"]),
-        }
-
-    tool_name = request["tool_name"]
-    arguments = dict(request.get("arguments", {}))
-    # Bypass NoteGuard's Tier 2 check — the operator just approved this action
-    if tool_name == "notes_reminders_create":
-        arguments["_operator_approved"] = True
-    try:
-        result = await execute_tool(tool_name, arguments)
-    except Exception as exc:
-        result = {"error": str(exc)}
-
-    trajectory_store.record(
-        request["run_id"],
-        "tool_executed",
-        agent_id=agent_id,
-        tool_name=tool_name,
-        tool_args=arguments,
-        tool_result=result,
-        risk_level="approval_required",
-    )
-
-    tool_msg = ToolMessage(
-        content=json.dumps(result, default=str),
-        tool_call_id=request.get("tool_call", {}).get("id", tool_name),
-        name=tool_name,
-    )
-
-    parked_messages = context.get("messages", [])
-    resumed_state: AgentState = {
-        "messages": [*parked_messages, tool_msg],
-        "user_id": context["user_id"],
-        "channel": context["channel"],
-        "run_id": request["run_id"],
-        "iteration_count": context.get("iteration_count", 0) + 1,
-        "tool_call_count": context.get("tool_call_count", 0) + 1,
-        "is_tainted": context.get("is_tainted", False),
-        "taint_sources": context.get("taint_sources", []),
-        "pending_approvals": [],
-        "active_agent": agent_id,
-        "tool_results": [*context.get("tool_results", []), {"tool_name": tool_name, "result": result}],
-        "approval_status": "approved",
-        "current_tool_call": None,
-    }
-
-    # Re-enter the graph with the tool result appended to the parked messages
-    graph_res = await graph.ainvoke(resumed_state)
-    pending = graph_res.get("pending_approvals", [])
-    raw = "Awaiting your approval to continue." if pending else str(graph_res["messages"][-1].content)
-    safe = DLPScanner.scan_and_redact(raw).sanitized_text
-
-    user_text = next(
-        (str(m.content) for m in reversed(parked_messages) if getattr(m, "type", "") in {"human", "user"}),
-        "",
-    )
-    memory_engine.record_turn(
-        user_id=context["user_id"],
-        user_text=user_text,
-        reply=safe,
-        run_id=request["run_id"],
-        channel=context["channel"],
-    )
-
-    return {
-        "reply": safe,
-        "run_id": request["run_id"],
-        "active_agent": graph_res.get("active_agent", agent_id),
-        "approval_request": pending[0] if pending else None,
-        "memory_context": memory_engine.get_last_memory_context(),
-        "trajectory": trajectory_store.get(request["run_id"]),
-    }
+async def resume_approval(approval_id, decision, *, owner_id='local_owner', conversation_key=None, runtime=None):
+    runtime = get_runtime(runtime)
+    request = runtime.services.approvals.get(approval_id)
+    async with runtime.lock(request['run_id']):
+        request = runtime.services.approvals.get(approval_id)
+        config = runtime.config(request['run_id'])
+        snapshot = await runtime.graph.aget_state(config)
+        if not snapshot.next or not snapshot.values or not snapshot.values.get('current_tool_call'):
+            runtime.services.approvals.invalidate(approval_id)
+            raise ValueError('Approval has no resumable checkpoint or was already consumed')
+        state = snapshot.values
+        runtime.services.approvals.validate(request, owner_id, state['current_tool_call'], state['conversation_key'])
+        if conversation_key is not None and conversation_key.model_dump() != state['conversation_key']:
+            raise ValueError('Approval belongs to another conversation')
+        runtime.services.approvals.resolve(approval_id, decision, owner_id=owner_id)
+        # If the decision node was checkpointed before an interrupted executor,
+        # continue that checkpoint instead of injecting a second interrupt value.
+        interrupted = any(task.interrupts for task in snapshot.tasks)
+        payload = Command(resume={'approval_id': approval_id, 'decision': decision}) if interrupted else None
+        result = await runtime.graph.ainvoke(payload, config)
+        return _response(result, runtime)

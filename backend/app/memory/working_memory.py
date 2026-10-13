@@ -13,4 +13,4 @@ from app.memory.episodic_store import episodic_store  # backward-compat re-expor
 
 def assemble(user_text: str, user_id: str = "local_user") -> list[BaseMessage]:
     """Build the full Working Memory message list for one agent run."""
-    return memory_engine.hydrate_context(agent_id="poseidon", user_id=user_id, user_text=user_text)
+    return list(memory_engine.hydrate_context(agent_id="poseidon", user_id=user_id, user_text=user_text).messages)

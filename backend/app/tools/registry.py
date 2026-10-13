@@ -76,10 +76,12 @@ def get_tools_for_agent(agent_id: str = "poseidon") -> list[dict[str, Any]]:
     """Return tool schemas available for the agent."""
     all_tools = get_all_tools()
     agent = soul_store.get_agent(agent_id)
-    if agent and agent.get("tools"):
+    if agent:
         names = agent.get("tools", [])
+        if '*' in names:
+            return [t['schema'] for t in all_tools.values()]
         return [all_tools[name]["schema"] for name in names if name in all_tools]
-    return [t["schema"] for t in all_tools.values()]
+    return []
 
 
 async def execute_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> Any:

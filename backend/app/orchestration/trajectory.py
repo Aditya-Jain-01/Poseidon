@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 from collections import defaultdict
 from typing import Any
+from app.security.secrets import redact
 
 
 # Scrubs API keys, tokens, and bearer headers from trajectory logs
@@ -28,7 +29,7 @@ class TrajectoryStore:
         self._runs: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     def record(self, run_id: str, step_type: str, **fields: Any) -> dict[str, Any]:
-        scrubbed = {k: _scrub(v) for k, v in fields.items()}
+        scrubbed = {k: redact(_scrub(v)) for k, v in fields.items()}
         step = {"step_type": step_type, "timestamp": datetime.now(timezone.utc).isoformat(), **scrubbed}
         self._runs[run_id].append(step)
         return step

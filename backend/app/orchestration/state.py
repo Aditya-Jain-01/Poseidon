@@ -1,30 +1,14 @@
 """AgentState — the Working Memory schema for LangGraph.
 
-Assembled fresh per run, discarded after the reply is sent.
+Assembled per run and persisted by the injected LangGraph checkpointer.
 This TypedDict is the state that flows through every node in the graph.
 """
 
-from datetime import datetime
 from typing import Annotated
 from typing_extensions import TypedDict
-from pydantic import BaseModel, Field
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
-
-
-class InboundEvent(BaseModel):
-    """The one internal event schema from spec §3.
-
-    Every channel adapter produces this; the harness never sees
-    anything channel-specific.
-    """
-    user_id: str
-    channel: str
-    channel_thread_id: str
-    text: str
-    timestamp: datetime
-    is_tainted: bool = False
-    taint_sources: list[str] = Field(default_factory=list)
+from app.models import InboundEvent
 
 
 class AgentState(TypedDict):
@@ -32,6 +16,8 @@ class AgentState(TypedDict):
 
     `messages` uses LangGraph's add_messages reducer so that each node
     can append to the conversation without overwriting what came before.
+    All other fields use replacement semantics: queues are replaced after each
+    dequeue, and telemetry/policy decisions belong only to this run.
     """
     messages: Annotated[list[BaseMessage], add_messages]
     user_id: str
@@ -46,3 +32,9 @@ class AgentState(TypedDict):
     tool_results: list[dict]
     approval_status: str
     current_tool_call: dict | None
+    pending_tool_calls: list[dict]
+    conversation_key: dict
+    actor: dict
+    user_text: str
+    memory_context: dict
+    policy_decision: dict
