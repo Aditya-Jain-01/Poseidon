@@ -17,9 +17,12 @@ Poseidon is a local-first personal-agent harness built with FastAPI, LangGraph, 
 - Local tools for notes/reminders, CRM contacts, calendar records, and procedural skills.
 - Three tool tiers: `auto`, `guarded_auto`, and `approval_required`.
 - Outbound secret/PII redaction, note-content inspection, bounded tool execution, and path validation.
-- Web/REST chat plus an optional Telegram webhook or long-polling adapter.
+- Web/REST chat plus an optional Telegram webhook or long-polling adapter with durable update receipt, atomic status claiming, restart-safe deduplication, and polling-offset persistence.
 - File-backed agent personas with tool allowlists, routing signals, and per-agent model configuration.
-- A React developer interface for chat, approvals, memory inspection, trajectories, topology, agents, gateway status, and model settings.
+- A React developer interface for chat, approvals, memory inspection, trajectories, topology, agents, gateway ledger, and model settings.
+- Bounded, secret-scrubbed audit events persisted to SQLite with configurable retention and owner-initiated deletion.
+- A typed frontend API layer with structured error propagation, request cancellation, and session/approval binding.
+- An offline core release gate (`backend/scripts/run_gate.py`) that runs all integration scenarios, the full backend suite, and frontend lint/tests without touching real user data.
 
 ## Architecture
 
@@ -77,7 +80,7 @@ The SQLite database is the source of truth for episodic and semantic memory. The
 
 The calendar tools operate on Poseidon's local JSON store. They do **not** integrate with Google Calendar, Outlook, or an operating-system calendar.
 
-`SandboxGuard` is an in-process validation and timeout boundary for trusted handlers. It is not a container, virtual machine, or adversarial code sandbox.
+`ExecutionGuard` (formerly described as `SandboxGuard`) is an in-process validation and timeout boundary for trusted handlers. It is **not** a container, virtual machine, or adversarial code sandbox and does not provide OS-level process isolation.
 
 ## Repository layout
 
@@ -86,17 +89,20 @@ Poseidon/
 ├── backend/
 │   ├── app/
 │   │   ├── agents/          # Conversational and summarizer agents
-│   │   ├── gateway/         # Web, Telegram, memory, agent, and trajectory APIs
+│   │   ├── db/              # SQLite migrations and connection helper
+│   │   ├── gateway/         # Web, Telegram, memory, agent, audit, and trajectory APIs
 │   │   ├── memory/          # Four-tier memory implementation
 │   │   ├── orchestration/   # LangGraph state, routing, approvals, trajectories
-│   │   ├── security/        # DLP, taint/risk analysis, NoteGuard, execution guard
+│   │   ├── security/        # DLP, taint/risk analysis, NoteGuard, audit service, execution guard
 │   │   ├── tools/           # Native tools, registry, and MCP registration layer
 │   │   ├── config.py
 │   │   ├── llm_providers.py
 │   │   └── main.py
-│   ├── tests/
-│   └── requirements.txt
+│   ├── scripts/
+│   │   └── run_gate.py      # Offline core release gate (M7.3)
+│   └── tests/
 ├── frontend/                # React 19 + Vite developer interface
+│   └── src/test/            # Vitest + React Testing Library test suites
 ├── memory-store/            # Local runtime state and agent/skill definitions
 ├── docs/superpowers/plans/  # Refactoring and hardening plans
 ├── .env.example
@@ -230,8 +236,8 @@ Set `TELEGRAM_ALLOWED_USER_IDS` before enabling Telegram. An empty allowlist rej
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Runtime, model, and Telegram status |
-| `POST` | `/chat` | Execute one agent turn |
+| `GET` | `/health` | Runtime, model, capabilities, and Telegram status |
+| `POST` | `/chat` | Execute one agent turn (accepts `thread_id`, `agent_id`) |
 | `POST` | `/chat/approve` | Approve or deny a parked tool call |
 | `POST` | `/security/inspect-tool` | Inspect tool-call risk and parameter differences |
 | `GET` | `/memory/semantic` | Read/search semantic facts |
@@ -241,8 +247,11 @@ Set `TELEGRAM_ALLOWED_USER_IDS` before enabling Telegram. An empty allowlist rej
 | `POST` | `/memory/consolidate` | Trigger consolidation |
 | `GET/POST/PUT/DELETE` | `/agents...` | Manage file-backed agent definitions |
 | `GET/PUT` | `/settings/llm...` | Inspect or update per-agent model configuration |
-| `GET` | `/runs/{run_id}/trajectory` | Read an in-memory execution trajectory |
-| `POST` | `/gateway/telegram/webhook` | Receive a Telegram update |
+| `GET` | `/gateway/events` | Query durable SQLite audit/gateway event ledger |
+| `GET` | `/audit/events` | Query bounded, redacted audit events |
+| `DELETE` | `/audit/events` | Owner-initiated audit log deletion |
+| `GET` | `/runs/{run_id}/trajectory` | Read a persisted execution trajectory |
+| `POST` | `/gateway/telegram/webhook` | Receive a Telegram update (requires `TELEGRAM_WEBHOOK_SECRET` if set) |
 
 Example chat request:
 
@@ -285,33 +294,38 @@ Backend:
 .\.venv\Scripts\python -m pytest backend\tests -q
 ```
 
+Offline core release gate (runs integration scenarios + full backend suite + frontend lint/tests, verifies real `memory-store/` is unchanged):
+
+```powershell
+.\.venv\Scripts\python backend\scripts\run_gate.py
+```
+
 Frontend:
 
 ```powershell
 Set-Location frontend
-npm run lint
+npm run lint        # oxlint — must exit 0 warnings
+npm test -- --run   # Vitest — 19 tests across 4 suites
 npm run build
 ```
 
-Tests should use temporary databases and storage paths. Do not point destructive test helpers at the real `memory-store/` directory.
+Tests use temporary databases and storage paths redirected by `conftest.py` environment overrides. The real `memory-store/` directory is never written by the test suite.
 
 ## Current limitations
 
 These are current implementation facts, not future promises:
 
-- Operator APIs use loopback trust in local mode and require `Authorization: Bearer <POSEIDON_API_TOKEN>` for remote requests. Request body/query identity is ignored. Non-loopback configuration requires a token and explicit `POSEIDON_CORS_ORIGINS` (a JSON array).
+- Operator APIs use loopback trust in local mode and require `Authorization: Bearer <POSEIDON_API_TOKEN>` for remote requests. Request body/query identity is ignored. Non-loopback configuration requires a token and explicit `POSEIDON_CORS_ORIGINS` (a JSON array). Wildcard `*` origins are rejected at startup.
 - Notes, reminders, CRM contacts, calendar records, and procedural skills are shared local stores rather than fully user-scoped repositories.
-- M0-M2 durability code is written, but its milestone checkpoints have not been signed off. SQLite checkpointing requires `langgraph-checkpoint-sqlite` and `aiosqlite`; the actual restart test and clean environment install remain unverified. Execution trajectories still use process memory.
-- The M2 graph queues tool calls in order and uses native approval interrupts. Its regression tests are written but have not completed execution in this session.
-- The taint/risk analyzer exists, but graph routing currently uses the registry's static tool tier rather than one unified taint-aware policy decision.
-- `SandboxGuard` cannot safely isolate untrusted Python or third-party plugin code.
-- DLP and prompt-risk detection are deterministic pattern-based safeguards, not comprehensive data-loss or prompt-injection prevention.
-- MCP registration infrastructure exists, but external server lifecycle/discovery is not a complete general-purpose MCP client runtime.
-- Telegram polling state and update deduplication are not durable across restarts.
+- Tool execution uses an in-process guard (timeout + parameter validation). This is **not** adversarial container or OS-level sandbox isolation; it does not protect against malicious native code.
+- The taint/risk analyzer exists and is used during Telegram processing. The graph's static tool tier is the primary policy; taint provides additional escalation signals but does not yet replace the static tier for all channels.
+- DLP and prompt-risk detection are deterministic pattern-based safeguards, not comprehensive data-loss prevention or prompt-injection guarantees.
+- MCP registration infrastructure exists but external server lifecycle/discovery is not a complete general-purpose MCP client runtime.
 - CORS uses an explicit origin list; wildcard origins are rejected at startup.
 - The semantic `MEMORY.md` mirror is a single generated file and can be overwritten when different user IDs are consolidated.
+- Telegram delivery is restart-safe and deduplication-backed by SQLite, but the adapter does not yet retry failed updates automatically after a crash.
 
-The canonical hardening plan is [finalplan.md](docs/superpowers/plans/finalplan.md); the [Person 1 implementation record](docs/superpowers/plans/finalplan-person-1.md#person-1-implementation-record-2026-10-13) documents current verification gaps. Its planned capabilities should not be described as implemented until their acceptance tests pass.
+For the full hardening plan and milestone history see [finalplan.md](docs/superpowers/plans/finalplan.md).
 
 ## Design intent
 
