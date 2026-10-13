@@ -9,7 +9,7 @@ from app.config import settings
 from app.gateway.telegram_adapter import process_telegram_update, is_user_allowed
 
 
-client = TestClient(app)
+client = TestClient(app, client=('127.0.0.1', 50000))
 
 
 def test_telegram_user_allowlist():
@@ -64,7 +64,8 @@ async def test_telegram_process_update_authorized():
                 assert mock_run.called
                 event_arg = mock_run.call_args[0][0]
                 assert event_arg.channel == "telegram"
-                assert event_arg.user_id == "telegram_12345"
+                assert event_arg.user_id == "local_owner"
+                assert event_arg.conversation_key.channel_account_id == "telegram_12345"
 
 
 def test_telegram_webhook_secret_header_verification():
@@ -173,5 +174,6 @@ async def test_telegram_explicit_agent_selection_and_local_provider():
         assert oct_conf["preset"] == "local"
         assert oct_conf["base_url"] == "http://localhost:11434/v1"
         assert oct_conf["model"] == "llama3.2"
-        assert oct_conf["api_key"] == "ollama"
+        assert oct_conf["has_api_key"] is True
+        assert "api_key" not in oct_conf
 

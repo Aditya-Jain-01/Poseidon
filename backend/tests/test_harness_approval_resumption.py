@@ -19,10 +19,10 @@ async def test_approval_parking_and_denial():
     }
 
     with patch("app.agents.qa_agent.call", new_callable=AsyncMock) as mock_llm:
-        mock_llm.return_value = {
-            "content": None,
-            "tool_calls": [fake_tool_call],
-        }
+        mock_llm.side_effect = [
+            {"content": None, "tool_calls": [fake_tool_call]},
+            {"content": "Action denied. No changes were made.", "tool_calls": []},
+        ]
 
         event = InboundEvent(
             user_id="test_approval_user",
@@ -39,7 +39,7 @@ async def test_approval_parking_and_denial():
         assert req["tool_name"] == "calendar_create"
 
         # Deny the approval
-        denied_res = await resume_approval(approval_id, decision="denied")
+        denied_res = await resume_approval(approval_id, decision="denied", owner_id=event.user_id)
         assert "denied" in denied_res["reply"].lower()
         assert denied_res["approval_request"] is None
 
@@ -73,6 +73,6 @@ async def test_approval_resumption_reenters_graph():
         approval_id = res["approval_request"]["id"]
 
         # Approve action -> re-enters graph
-        approved_res = await resume_approval(approval_id, decision="approved")
+        approved_res = await resume_approval(approval_id, decision="approved", owner_id=event.user_id)
         assert "successfully scheduled" in approved_res["reply"]
         assert approved_res["approval_request"] is None

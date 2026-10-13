@@ -42,6 +42,7 @@ class TestEpisodicStore(unittest.TestCase):
         self.db_path = Path(self.tmpdir.name) / "test_state.db"
         self.fake_embed = FakeEmbeddingService()
         self.store = EpisodicStore(db_path=self.db_path, embed_svc=self.fake_embed)
+        self.store.init_db()
 
     def tearDown(self):
         del self.store

@@ -9,7 +9,7 @@ def test_memory_engine_hydrate_context():
         agent_id="poseidon",
         user_id="test_user_engine",
         user_text="What is my name?",
-    )
+    ).messages
 
     assert len(messages) >= 2
     system_msg = messages[0]

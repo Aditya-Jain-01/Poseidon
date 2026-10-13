@@ -42,7 +42,7 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self._orig_agent_overrides = {k: dict(v) for k, v in llm_provider._agent_overrides.items()}
         llm_provider._config_path = self.tmp_config
 
-        self.client = TestClient(app)
+        self.client = TestClient(app, client=('127.0.0.1', 50000))
 
     def tearDown(self):
         from app.llm_providers import llm_provider

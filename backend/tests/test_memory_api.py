@@ -46,7 +46,7 @@ class TestMemoryAPI(unittest.TestCase):
         summarizer_module.episodic_store = self.episodic
         summarizer_module.procedural_store = self.procedural
 
-        self.client = TestClient(app)
+        self.client = TestClient(app, client=('127.0.0.1', 50000))
 
     def tearDown(self):
         adapter_module.episodic_store = self._orig_epi
@@ -65,10 +65,10 @@ class TestMemoryAPI(unittest.TestCase):
 
     def test_semantic_memory_endpoint(self):
         """GET /memory/semantic retrieves facts."""
-        self.semantic.add_fact("local_user", "Prefers TypeScript", category="preference")
-        self.semantic.add_fact("local_user", "Lives in SF", category="profile")
+        self.semantic.add_fact("local_owner", "Prefers TypeScript", category="preference")
+        self.semantic.add_fact("local_owner", "Lives in SF", category="profile")
 
-        res = self.client.get("/memory/semantic?user_id=local_user")
+        res = self.client.get("/memory/semantic?user_id=local_owner")
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["count"], 2)
@@ -77,10 +77,10 @@ class TestMemoryAPI(unittest.TestCase):
 
     def test_semantic_category_filter(self):
         """GET /memory/semantic with category filter."""
-        self.semantic.add_fact("local_user", "Prefers TypeScript", category="preference")
-        self.semantic.add_fact("local_user", "Lives in SF", category="profile")
+        self.semantic.add_fact("local_owner", "Prefers TypeScript", category="preference")
+        self.semantic.add_fact("local_owner", "Lives in SF", category="profile")
 
-        res = self.client.get("/memory/semantic?user_id=local_user&category=preference")
+        res = self.client.get("/memory/semantic?user_id=local_owner&category=preference")
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["count"], 1)
@@ -88,10 +88,10 @@ class TestMemoryAPI(unittest.TestCase):
 
     def test_episodic_memory_endpoint(self):
         """GET /memory/episodic retrieves history."""
-        self.episodic.log_event("local_user", "user", "What is the weather?")
-        self.episodic.log_event("local_user", "assistant", "Sunny and 72F.")
+        self.episodic.log_event("local_owner", "user", "What is the weather?")
+        self.episodic.log_event("local_owner", "assistant", "Sunny and 72F.")
 
-        res = self.client.get("/memory/episodic?user_id=local_user")
+        res = self.client.get("/memory/episodic?user_id=local_owner")
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["count"], 2)
@@ -114,10 +114,10 @@ class TestMemoryAPI(unittest.TestCase):
 
     def test_memory_status_endpoint(self):
         """GET /memory/status returns status summary."""
-        self.semantic.add_fact("local_user", "A fact")
-        self.episodic.log_event("local_user", "user", "Hello")
+        self.semantic.add_fact("local_owner", "A fact")
+        self.episodic.log_event("local_owner", "user", "Hello")
 
-        res = self.client.get("/memory/status?user_id=local_user")
+        res = self.client.get("/memory/status?user_id=local_owner")
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["semantic_facts_count"], 1)
@@ -127,13 +127,13 @@ class TestMemoryAPI(unittest.TestCase):
     @patch("app.agents.summarizer_agent.summarize_events")
     def test_post_consolidate_endpoint(self, mock_summarize):
         """POST /memory/consolidate triggers distillation."""
-        self.episodic.log_event("local_user", "user", "My dog is named Cooper.")
+        self.episodic.log_event("local_owner", "user", "My dog is named Cooper.")
         mock_summarize.return_value = {
             "facts": [{"fact": "User has a dog named Cooper", "category": "relationship"}],
             "skills": [],
         }
 
-        res = self.client.post("/memory/consolidate", json={"user_id": "local_user", "force": True})
+        res = self.client.post("/memory/consolidate", json={"user_id": "local_owner", "force": True})
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertTrue(data["consolidated"])
