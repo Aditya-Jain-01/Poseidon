@@ -78,7 +78,18 @@ PERSONAL_DATA_SQL = (
     "CREATE TABLE agent_definitions (id TEXT PRIMARY KEY, version INTEGER NOT NULL, definition_json TEXT NOT NULL, is_seed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
     "CREATE TABLE memory_consolidation_jobs (owner_id TEXT PRIMARY KEY, status TEXT NOT NULL, batch_hash TEXT, last_error TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
 )
-MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL))
+TELEGRAM_AND_AUDIT_SQL = (
+    "CREATE TABLE telegram_updates (update_id INTEGER PRIMARY KEY, status TEXT NOT NULL CHECK(status IN ('received','processing','completed','failed')), run_id TEXT NOT NULL UNIQUE, attempt_count INTEGER NOT NULL DEFAULT 0, payload_hash TEXT NOT NULL, last_error TEXT, received_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT)",
+    "CREATE INDEX idx_telegram_updates_status ON telegram_updates(status, updated_at)",
+    "CREATE TABLE gateway_channel_state (channel TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE, run_id TEXT NOT NULL, owner_id TEXT NOT NULL, channel TEXT NOT NULL, direction TEXT NOT NULL CHECK(direction IN ('inbound','outbound','internal')), agent_id TEXT, model_name TEXT, event_type TEXT NOT NULL, payload_json TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE INDEX idx_audit_run ON audit_events(run_id)",
+    "CREATE INDEX idx_audit_owner_created ON audit_events(owner_id, created_at DESC)",
+    "CREATE INDEX idx_audit_channel ON audit_events(channel, created_at DESC)",
+    "CREATE TABLE trajectory_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, step_index INTEGER NOT NULL, step_type TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(run_id, step_index))",
+    "CREATE INDEX idx_trajectory_steps_run ON trajectory_steps(run_id, step_index)",
+)
+MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL), (4, TELEGRAM_AND_AUDIT_SQL))
 
 
 def apply_migrations(db_path, embedding_dim=384):

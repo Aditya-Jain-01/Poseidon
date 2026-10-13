@@ -61,6 +61,9 @@ class ToolInspectRequest(BaseModel):
 router = APIRouter()
 
 
+from app.security.audit import audit_service
+
+
 @router.post("/chat")
 async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends(resolve_actor)):
     risk_info = calculate_overall_risk('web', req.text)
@@ -77,26 +80,83 @@ async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends
         logging.getLogger(__name__).warning('Chat without thread_id is deprecated; using compatibility default thread')
 
     run_id = str(uuid4())
+    audit_service.record_event(
+        run_id=run_id,
+        owner_id=actor.owner_id,
+        channel='web',
+        direction='inbound',
+        event_type='chat_request',
+        status='received',
+        agent_id=req.agent_id,
+        payload={'text': req.text, 'thread_id': req.thread_id or 'default'},
+    )
     try:
         from app.orchestration.router import route_request, UnknownAgentError
         target_agent = route_request(req.text, explicit_agent_id=req.agent_id)
         result = await (run_agent(event, run_id, agent_id=target_agent) if req.agent_id else run_agent(event, run_id))
     except UnknownAgentError as e:
+        audit_service.record_event(
+            run_id=run_id,
+            owner_id=actor.owner_id,
+            channel='web',
+            direction='outbound',
+            event_type='unknown_agent_error',
+            status='failed',
+            payload={'agent_id': e.agent_id, 'available': e.available},
+        )
         return JSONResponse(status_code=422, content={"error": "unknown_agent", "agent_id": e.agent_id, "available_agent_ids": e.available, "run_id": run_id})
     except Exception as e:
+        audit_service.record_event(
+            run_id=run_id,
+            owner_id=actor.owner_id,
+            channel='web',
+            direction='outbound',
+            event_type='chat_error',
+            status='failed',
+            payload={'error': type(e).__name__, 'detail': redact(str(e))},
+        )
         return JSONResponse(
             status_code=502,
             content={"error": type(e).__name__, "detail": redact(str(e)), "run_id": run_id},
         )
 
+    audit_service.record_event(
+        run_id=run_id,
+        owner_id=actor.owner_id,
+        channel='web',
+        direction='outbound',
+        event_type='chat_response',
+        status='awaiting_approval' if result.get('approval_request') else 'completed',
+        agent_id=result.get('active_agent'),
+        payload={'reply': result.get('reply'), 'has_approval': bool(result.get('approval_request'))},
+    )
     return ChatResponse(**result)
 
 
 @router.post("/chat/approve")
 async def approve(req: ApprovalDecisionRequest, actor: ActorContext = Depends(resolve_actor)):
     """Resolve a real pending tool action. Silence never executes the action."""
+    audit_service.record_event(
+        run_id=req.approval_id,
+        owner_id=actor.owner_id,
+        channel='web',
+        direction='inbound',
+        event_type='approval_decision',
+        status=req.decision,
+        payload={'approval_id': req.approval_id, 'decision': req.decision},
+    )
     try:
-        return await resume_approval(req.approval_id, req.decision, owner_id=actor.owner_id)
+        res = await resume_approval(req.approval_id, req.decision, owner_id=actor.owner_id)
+        audit_service.record_event(
+            run_id=res.get('run_id', req.approval_id),
+            owner_id=actor.owner_id,
+            channel='web',
+            direction='outbound',
+            event_type='approval_resolved',
+            status='completed',
+            payload={'reply': res.get('reply')},
+        )
+        return res
     except KeyError as exc:
         return JSONResponse(status_code=404, content={"error": redact(str(exc))})
     except ValueError as exc:
