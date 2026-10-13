@@ -4,6 +4,11 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+    globals: true,
+  },
   server: {
     port: 5173,
     proxy: {
@@ -13,6 +18,8 @@ export default defineConfig({
       '/runs': 'http://127.0.0.1:8000',
       '/agents': 'http://127.0.0.1:8000',
       '/settings': 'http://127.0.0.1:8000',
+      '/gateway': 'http://127.0.0.1:8000',
+      '/audit': 'http://127.0.0.1:8000',
       '/ws': {
         target: 'ws://127.0.0.1:8000',
         ws: true,
