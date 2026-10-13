@@ -10,10 +10,10 @@ import { api } from './client';
  * @param {string} userId — defaults to 'local_user'
  * @returns {Promise<{ reply: string, run_id: string }>}
  */
-export async function sendChatMessage(text, userId = 'local_user', signal = null) {
+export async function sendChatMessage(text, userId = 'local_user', signal = null, threadId = 'default') {
   return api('/chat', {
     method: 'POST',
-    body: { text, user_id: userId },
+    body: { text, user_id: userId, thread_id: threadId },
     signal,
   });
 }

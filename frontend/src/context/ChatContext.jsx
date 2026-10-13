@@ -174,7 +174,7 @@ export function ChatProvider({ children }) {
     setError(null);
 
     try {
-      const data = await sendChatMessage(text.trim(), 'local_user', controller.signal);
+      const data = await sendChatMessage(text.trim(), 'local_user', controller.signal, targetSessionId);
 
       const agentMessage = {
         id: nextId(),
