@@ -29,6 +29,8 @@ node_modules/
 venv/
 .venv/
 __pycache__/
+.pytest-basetemp*/
+
 
 .agent
 .agents
@@ -36,9 +38,9 @@ AGENTS.md
 CONTEXT.md
 pytest.ini
 skills-lock.json
-docs/
-
+docs
 openspec
+superpowers
 
 
 # Runtime user memory, notes, and dynamic skills
