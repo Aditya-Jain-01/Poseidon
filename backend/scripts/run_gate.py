@@ -1,4 +1,4 @@
-"""Offline Core Release Gate — M7.3
+"""Offline Core Release Gate
 
 Run every integration scenario, the full backend suite, frontend lint, and
 frontend tests in a single isolated pass.  The real memory-store/ directory
@@ -81,7 +81,7 @@ def _check_python_version() -> None:
 # ---------------------------------------------------------------------------
 
 _INTEGRATION_SCENARIOS = '''
-"""M7.3 offline integration scenarios — all run in isolated temp DB."""
+"""Offline integration scenarios — all run in isolated temp DB."""
 import hashlib
 import json
 import pytest
@@ -544,7 +544,7 @@ def run_backend_gate(tmp: Path) -> int:
     # tmp and copy the real conftest.py there.
     integ_dir = tmp / "integ"
     integ_dir.mkdir()
-    scenarios_file = integ_dir / "test_m7_integration_scenarios.py"
+    scenarios_file = integ_dir / "test_integration_scenarios.py"
     scenarios_file.write_text(_INTEGRATION_SCENARIOS, encoding="utf-8")
 
     # Copy the real conftest.py so isolated_stores fixture is available
@@ -554,7 +554,7 @@ def run_backend_gate(tmp: Path) -> int:
     failures = 0
 
     rc = _run(
-        "Integration scenarios (M7.3)",
+        "Integration scenarios",
         [sys.executable, "-m", "pytest", str(scenarios_file), "-q",
          "-o", "asyncio_mode=auto",
          "-o", f"pythonpath={BACKEND_DIR}",
@@ -601,7 +601,7 @@ def run_frontend_gate() -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Poseidon Offline Core Release Gate (M7.3)")
+    parser = argparse.ArgumentParser(description="Poseidon Offline Core Release Gate")
     parser.add_argument("--backend-only", action="store_true")
     parser.add_argument("--frontend-only", action="store_true")
     args = parser.parse_args()
@@ -609,7 +609,7 @@ def main() -> int:
     _check_python_version()
 
     print("\n" + "=" * 70)
-    print("  Poseidon Offline Core Release Gate — M7.3")
+    print("  Poseidon Offline Core Release Gate")
     print("=" * 70)
     print(f"  Project  : {PROJECT}")
     print(f"  Python   : {sys.version}")

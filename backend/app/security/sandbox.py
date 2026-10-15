@@ -44,7 +44,7 @@ class ExecutionGuard:
 
     It runs reviewed built-in handlers in the Poseidon process. It does not
     isolate filesystem, network, or arbitrary third-party code. MCP process
-    supervision and arbitrary plugin loading are deliberately deferred to M8.
+    supervision and arbitrary plugin loading are outside this guard's scope.
     """
 
     @classmethod
@@ -128,7 +128,7 @@ class ExecutionGuard:
             raise
 
 
-# Compatibility aliases for callers during the M3 migration. New code must use
+# Compatibility aliases for existing callers. New code must use
 # ExecutionGuard and the Execution* exception names above.
 SandboxGuard = ExecutionGuard
 SandboxSecurityError = ExecutionSecurityError

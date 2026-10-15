@@ -1,4 +1,4 @@
-"""Unit tests for Working Memory assembly (Person A — Stage 4)."""
+"""Unit tests for working memory assembly."""
 
 import gc
 import unittest

@@ -1,4 +1,4 @@
-"""Regression coverage for the M3/M5 authority boundaries."""
+"""Regression coverage for tool policy and routing authority boundaries."""
 import pytest
 
 from app.models import ActorContext, ConversationKey, ToolCall, ToolExecutionContext

@@ -17,8 +17,9 @@ from app.orchestration.trajectory import trajectory_store
 from app.security.risk_analyzer import RiskAnalyzer
 from app.security.note_guard import NoteGuard
 from app.security.secrets import redact
+from app.security.sandbox import ExecutionTimeoutError
 from app.security.taint import is_channel_untrusted
-from app.tools.registry import get_tools_for_agent
+from app.tools.registry import get_tool, get_tools_for_agent
 from app.tools.policy import ToolPolicyService
 from app.tools.execution import ToolExecutionService
 
@@ -55,10 +56,15 @@ def _tool_message(call, result):
     return ToolMessage(content=json.dumps(result, default=str), tool_call_id=call['id'], name=call['name'], id=f"result:{call['id']}")
 
 
-def _finish_call(state, result):
+def _finish_call(state, result, *, external_result=False, uncertain=False):
     call = state['current_tool_call']
-    return {'messages': [_tool_message(call, result)], 'tool_results': [*state['tool_results'], {'tool_call_id': call['id'], 'tool_name': call['name'], 'result': result}],
-            'tool_call_count': state['tool_call_count'] + 1, 'current_tool_call': None, 'approval_status': '', 'policy_decision': {}}
+    messages = [_tool_message(call, result)]
+    if uncertain:
+        messages.append(AIMessage(content='The tool outcome is uncertain. Check whether the action happened before trying it again.'))
+    return {'messages': messages, 'tool_results': [*state['tool_results'], {'tool_call_id': call['id'], 'tool_name': call['name'], 'result': result}],
+            'tool_call_count': state['tool_call_count'] + 1, 'current_tool_call': None, 'approval_status': '', 'policy_decision': {},
+            'is_tainted': state['is_tainted'] or external_result,
+            'taint_sources': list(dict.fromkeys([*state['taint_sources'], *([call['name']] if external_result else [])]))}
 
 
 def build_graph(checkpointer, services):
@@ -125,7 +131,7 @@ def build_graph(checkpointer, services):
         if decision.approval_id != request['id']:
             raise ValueError('Resume decision does not match the interrupted approval')
         row = services.approvals.get(request['id'])
-        services.approvals.validate(row, state['user_id'], call, state['conversation_key'])
+        services.approvals.validate(row, state['user_id'], call, state['conversation_key'], policy_version=state['policy_decision'].get('policy_version'))
         if row['status'] not in {decision.decision, 'consumed' if decision.decision == 'approved' else 'denied'}:
             raise ValueError('Approval decision was not resolved by the trusted endpoint')
         if not _allowed(services, state['active_agent'], call['name']):
@@ -134,6 +140,8 @@ def build_graph(checkpointer, services):
 
     async def tool_executor(state):
         call = state['current_tool_call']
+        tool = get_tool(call['name'])
+        external_result = bool(tool and tool['trusted_provenance'] != 'built_in')
         if state['policy_decision']['decision'] == 'deny' or state.get('approval_status') == 'denied':
             return _finish_call(state, {'error': 'denied', 'detail': 'Action denied. No changes were made.'})
         if not _allowed(services, state['active_agent'], call['name']):
@@ -142,18 +150,19 @@ def build_graph(checkpointer, services):
             return _finish_call(state, {'error': 'tool_call_limit'})
         previous = services.executions.get(state['run_id'], call)
         if previous and previous['status'] in {'completed', 'failed'}:
-            return _finish_call(state, json.loads(previous['result_json']))
+            return _finish_call(state, json.loads(previous['result_json']), external_result=external_result)
         if state.get('approval_status') == 'approved':
             request = services.approvals.park(state['run_id'], call, state)
-            services.approvals.consume(request['id'], state['user_id'], call, state['conversation_key'])
+            services.approvals.consume(request['id'], state['user_id'], call, state['conversation_key'], policy_version=state['policy_decision'].get('policy_version'))
         if not services.executions.claim(state['run_id'], call):
             previous = services.executions.get(state['run_id'], call)
             result = json.loads(previous['result_json']) if previous and previous['result_json'] else {'error': 'execution_uncertain', 'detail': 'An earlier execution has no durable terminal result; it will not be repeated automatically.'}
-            return _finish_call(state, result)
+            return _finish_call(state, result, external_result=external_result if previous and previous['result_json'] else False, uncertain=result.get('error') == 'execution_uncertain')
         arguments = dict(call['arguments'])
         # Legacy NoteGuard expects this internal flag. It is never model-visible.
         if call['name'] == 'notes_reminders_create' and state.get('approval_status') == 'approved':
             arguments['_operator_approved'] = True
+        uncertain = False
         try:
             if services.tool_executor:
                 result = await services.tool_executor(call['name'], arguments)
@@ -161,14 +170,23 @@ def build_graph(checkpointer, services):
                 context = ToolExecutionContext(actor=state['actor'], conversation_key=state['conversation_key'], run_id=state['run_id'], agent_id=state['active_agent'], is_tainted=state['is_tainted'], taint_sources=state['taint_sources'])
                 result = await services.tool_execution_service.execute(call, context, approval_granted=state.get('approval_status') == 'approved')
             result = json.loads(json.dumps(result, default=str))
+        except ExecutionTimeoutError:
+            uncertain = True
+            result = {'error': 'execution_uncertain', 'detail': 'The tool timed out; its outcome is unknown. Check before trying again.'}
         except Exception as exc:
-            result = {'error': type(exc).__name__, 'detail': redact(str(exc))}
+            uncertain = bool(tool and tool['has_side_effects'])
+            result = ({'error': 'execution_uncertain', 'detail': 'The tool failed after execution began; its outcome is unknown. Check before trying again.'}
+                      if uncertain else {'error': type(exc).__name__, 'detail': redact(str(exc))})
         result = redact(result)
-        services.executions.complete(state['run_id'], call, result)
-        trajectory_store.record(state['run_id'], 'tool_executed', agent_id=state['active_agent'], conversation_key=state['conversation_key'], tool_name=call['name'], tool_result=result)
-        return _finish_call(state, result)
+        if not uncertain:
+            services.executions.complete(state['run_id'], call, result)
+        trajectory_store.record(state['run_id'], 'tool_uncertain' if uncertain else 'tool_executed', agent_id=state['active_agent'], conversation_key=state['conversation_key'], tool_name=call['name'], tool_result=result)
+        return _finish_call(state, result, external_result=external_result and not uncertain, uncertain=uncertain)
 
     def after_tool(state):
+        last_result = state['tool_results'][-1]['result']
+        if isinstance(last_result, dict) and last_result.get('error') == 'execution_uncertain':
+            return 'end'
         return 'select' if state.get('pending_tool_calls') else 'agent'
 
     builder = StateGraph(AgentState)
@@ -180,7 +198,7 @@ def build_graph(checkpointer, services):
     builder.add_conditional_edges('agent', lambda s: 'select' if s.get('pending_tool_calls') else 'end', {'select': 'select', 'end': END})
     builder.add_conditional_edges('select', route_call, {'approval': 'approval', 'execute': 'execute', 'end': END, 'limit': END})
     builder.add_edge('approval', 'execute')
-    builder.add_conditional_edges('execute', after_tool, {'select': 'select', 'agent': 'agent'})
+    builder.add_conditional_edges('execute', after_tool, {'select': 'select', 'agent': 'agent', 'end': END})
     return builder.compile(checkpointer=checkpointer)
 
 
@@ -268,7 +286,9 @@ async def resume_approval(approval_id, decision, *, owner_id='local_owner', conv
             runtime.services.approvals.invalidate(approval_id)
             raise ValueError('Approval has no resumable checkpoint or was already consumed')
         state = snapshot.values
-        runtime.services.approvals.validate(request, owner_id, state['current_tool_call'], state['conversation_key'])
+        runtime.services.approvals.validate(request, owner_id, state['current_tool_call'], state['conversation_key'], policy_version=state['policy_decision'].get('policy_version'))
+        if runtime.services.tool_tier is None and request['policy_version'] != runtime.services.tool_policy.policy_version:
+            raise ValueError('Approval policy version mismatch')
         if conversation_key is not None and conversation_key.model_dump() != state['conversation_key']:
             raise ValueError('Approval belongs to another conversation')
         runtime.services.approvals.resolve(approval_id, decision, owner_id=owner_id)

@@ -1,135 +1,79 @@
-# Poseidon
+﻿# Poseidon
 
-Poseidon is a local-first personal-agent harness built with FastAPI, LangGraph, React, and SQLite. It assembles each agent turn from an agent persona, active procedural skills, semantic facts, relevant episodic history, and the current conversation, then runs the turn through a bounded tool-calling graph.
+**A personal AI assistant with persistent memory, controlled tool execution, and a web interface for inspecting every run.**
 
-> **Project status:** active personal/learning project. The core chat, memory, local tools, approval flow, Telegram adapter, agent definitions, and developer UI work today. The hardening roadmap is not fully implemented; read [Current limitations](#current-limitations) before treating Poseidon as a multi-user or production service.
+Poseidon connects conversational AI to notes, contacts, calendar records, and reusable task instructions. It retrieves context from previous conversations, evaluates tool calls against an explicit policy, and pauses sensitive actions for approval. A React dashboard exposes the assistant's memory, pending approvals, and execution history.
 
-## What works today
+Built with **Python, FastAPI, LangGraph, SQLite, React, and Vite**. Supports OpenAI-compatible model endpoints and an optional Telegram interface.
 
-- OpenAI-compatible inference through a configurable model and base URL, including local Ollama and compatible cloud providers.
-- A bounded LangGraph loop with typed state, iteration limits, tool-call limits, tool execution, and approval routing.
-- Four memory tiers:
-  - **Working:** in-process conversation context.
-  - **Episodic:** SQLite conversation events with embeddings and vector retrieval.
-  - **Semantic:** SQLite FTS5 facts ranked with BM25 and mirrored to a readable `MEMORY.md` file.
-  - **Procedural:** file-backed `*.SKILL.md` playbooks selected by trigger matching.
-- Background and manually triggered consolidation of episodic events into semantic memory.
-- Local tools for notes/reminders, CRM contacts, calendar records, and procedural skills.
-- Three tool tiers: `auto`, `guarded_auto`, and `approval_required`.
-- Outbound secret/PII redaction, note-content inspection, bounded tool execution, and path validation.
-- Web/REST chat plus an optional Telegram webhook or long-polling adapter with durable update receipt, atomic status claiming, restart-safe deduplication, and polling-offset persistence.
-- File-backed agent personas with tool allowlists, routing signals, and per-agent model configuration.
-- A React developer interface for chat, approvals, memory inspection, trajectories, topology, agents, gateway ledger, and model settings.
-- Bounded, secret-scrubbed audit events persisted to SQLite with configurable retention and owner-initiated deletion.
-- A typed frontend API layer with structured error propagation, request cancellation, and session/approval binding.
-- An offline core release gate (`backend/scripts/run_gate.py`) that runs all integration scenarios, the full backend suite, and frontend lint/tests without touching real user data.
+## Capabilities
+
+- **Persistent context:** conversation retrieval through embeddings, searchable facts through SQLite FTS5, and file-based procedural skills.
+- **Personal tools:** search and manage notes, reminders, contacts, and local calendar events.
+- **Approval workflow:** review sensitive actions before execution, with SQLite-backed graph checkpoints and approval records.
+- **Agent configuration:** define personas, tool permissions, routing signals, and per-agent model settings.
+- **Execution visibility:** inspect trajectories, memory, audit events, and model configuration in the web interface.
+- **Multiple interfaces:** interact through the browser, REST API, or Telegram, with durable receipt tracking for Telegram updates.
 
 ## Architecture
 
-```text
-Browser / REST / Telegram
-          |
-          v
-     InboundEvent
-          |
-          v
-  Agent routing + memory hydration
-          |
-          v
-  LangGraph bounded execution loop
-     |          |           |
-     |          |           +--> approval gate
-     |          +--------------> tool registry + execution guard
-     +-------------------------> configured LLM endpoint
-          |
-          v
-   DLP-filtered response
-          |
-          +--> episodic persistence
-          +--> optional consolidation
+```mermaid
+flowchart TD
+    A[Web / REST / Telegram] --> B[Identity and agent routing]
+    B --> C[Memory retrieval]
+    C --> D[LangGraph execution loop]
+    D --> E[OpenAI-compatible model]
+    E --> D
+    D --> F[Tool policy]
+    F --> G[Operator approval]
+    F --> H[Tool execution]
+    G --> H
+    H --> D
+    D --> I[Response filtering and persistence]
+    J[(SQLite)] --- C
+    J --- D
+    J --- H
+    J --- I
 ```
 
-The application is local-first, not necessarily offline. Runtime data is stored under `memory-store/`, but model calls leave the machine when a cloud endpoint is configured. Use Ollama or another local OpenAI-compatible endpoint for fully local inference.
+FastAPI handles incoming requests and resolves the caller's identity. The orchestration layer selects an agent, retrieves relevant memory, and runs a bounded model/tool loop. A shared policy service checks tool availability, argument shape, agent permissions, execution limits, and context risk before dispatching a handler.
 
-## Memory model
+LangGraph checkpoints and approval records preserve execution state across restarts. The execution ledger records tool outcomes and avoids automatically repeating calls whose earlier outcome is uncertain. Audit events and trajectories make the flow inspectable from the dashboard.
 
-| Tier | Implementation | Lifetime | Used during inference |
-|---|---|---|---|
-| Working | In-memory session messages | Until process restart | Yes |
-| Episodic | `state.db`, embeddings, sqlite-vec when available | Persistent | Yes, vector relevance retrieval |
-| Semantic | `state.db` FTS5 index + `MEMORY.md` mirror | Persistent | Yes, BM25 keyword retrieval |
-| Procedural | `memory-store/skills/*.SKILL.md` | Persistent | Yes, trigger-based selection |
+### Memory
 
-`MemoryEngine.hydrate_context()` builds the system context before each model call. `MemoryEngine.record_turn()` writes completed conversations to episodic memory. Once the configured threshold is reached, the summarizer can promote durable information into semantic memory.
+| Layer | Implementation | Role |
+| --- | --- | --- |
+| Working | In-process session context | Recent conversation messages |
+| Episodic | SQLite with embeddings | Retrieve relevant past conversations |
+| Semantic | SQLite FTS5 and BM25 ranking | Retrieve stored facts and preferences |
+| Procedural | `*.SKILL.md` files | Select reusable instructions by trigger |
 
-The SQLite database is the source of truth for episodic and semantic memory. The generated `MEMORY.md` file is for inspection, not primary storage.
+Memory hydration assembles context before inference. Completed turns are recorded as episodes; consolidation can extract durable facts into semantic memory. SQLite is the source of truth for episodic and semantic records, while a generated Markdown mirror supports manual inspection.
 
-## Tool policy
+### Tool permissions
 
-| Tool | Purpose | Tier |
-|---|---|---|
-| `crm_read` | Search local contacts | `auto` |
-| `crm_write` | Create, update, or delete contacts | `approval_required` |
-| `notes_reminders_read` | Search notes and reminders | `auto` |
-| `notes_reminders_create` | Create a note or reminder | `guarded_auto` |
-| `notes_reminders_delete` | Delete a note or reminder | `approval_required` |
-| `calendar_read` | Search local calendar records | `auto` |
-| `calendar_create` | Create a local calendar record | `approval_required` |
-| `skill_manage_read` | List procedural skills | `auto` |
-| `skill_manage_write` | Create a procedural skill | `approval_required` |
+| Policy tier | Examples | Behavior |
+| --- | --- | --- |
+| `auto` | Read contacts, notes, calendar events, or skills | Execute when policy checks pass |
+| `guarded_auto` | Create notes and reminders | Inspect content; suspicious requests require approval |
+| `approval_required` | Modify contacts, delete notes, create calendar events or skills | Pause for operator approval |
 
-The calendar tools operate on Poseidon's local JSON store. They do **not** integrate with Google Calendar, Outlook, or an operating-system calendar.
+Notes, contacts, and calendar records use transactional, owner-scoped SQLite repositories. Calendar events are local to Poseidon; external calendar integration is outside the current scope.
 
-`ExecutionGuard` (formerly described as `SandboxGuard`) is an in-process validation and timeout boundary for trusted handlers. It is **not** a container, virtual machine, or adversarial code sandbox and does not provide OS-level process isolation.
+## Run locally
 
-## Repository layout
+Requirements: **Python 3.11+**, **Node.js 20.19+ within the 20.x line or 22.12+**, and **npm**. SQLite must support FTS5, JSON functions, and WAL. Startup checks report database capabilities; vector retrieval falls back to Python cosine similarity when the SQLite vector extension is unavailable.
 
-```text
-Poseidon/
-├── backend/
-│   ├── app/
-│   │   ├── agents/          # Conversational and summarizer agents
-│   │   ├── db/              # SQLite migrations and connection helper
-│   │   ├── gateway/         # Web, Telegram, memory, agent, audit, and trajectory APIs
-│   │   ├── memory/          # Four-tier memory implementation
-│   │   ├── orchestration/   # LangGraph state, routing, approvals, trajectories
-│   │   ├── security/        # DLP, taint/risk analysis, NoteGuard, audit service, execution guard
-│   │   ├── tools/           # Native tools, registry, and MCP registration layer
-│   │   ├── config.py
-│   │   ├── llm_providers.py
-│   │   └── main.py
-│   ├── scripts/
-│   │   └── run_gate.py      # Offline core release gate (M7.3)
-│   └── tests/
-├── frontend/                # React 19 + Vite developer interface
-│   └── src/test/            # Vitest + React Testing Library test suites
-├── memory-store/            # Local runtime state and agent/skill definitions
-├── docs/superpowers/plans/  # Refactoring and hardening plans
-├── .env.example
-└── GUARDRAILS.md
-```
+The commands below use PowerShell and start from the repository root.
 
-## Requirements
-
-- Python 3.11 or newer (the Person 1 environment snapshot targets Python 3.14)
-- Node.js `^20.19.0` or `>=22.12.0` (required by the installed Vite version)
-- npm
-
-The embedding dependency may download the configured sentence-transformers model on first use. A cloud LLM configuration also requires network access.
-
-## Quick start
-
-### 1. Configure the environment
-
-From the repository root:
+### 1. Configure a model
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and provide an OpenAI-compatible base URL, model identifier, and suitable API key. Do not commit `.env`.
-
-Example for local Ollama:
+Edit `.env` with your endpoint, model, and credentials. For a local Ollama endpoint with `llama3.2` already installed:
 
 ```dotenv
 POSEIDON_BASE_URL=http://localhost:11434/v1
@@ -137,196 +81,100 @@ POSEIDON_MODEL=llama3.2
 POSEIDON_API_KEY=ollama
 ```
 
-Example for another OpenAI-compatible provider:
+For a cloud provider, supply its OpenAI-compatible base URL, model identifier, and API key. The Settings view supports per-agent provider overrides; check it if an agent uses a different model from the environment configuration.
 
-```dotenv
-POSEIDON_BASE_URL=https://provider.example/v1
-POSEIDON_MODEL=provider/model-name
-POSEIDON_API_KEY=replace-me
-```
+Keep credentials in `.env` or environment variables. Cloud inference sends model inputs to the configured provider. Embeddings may require a model download on first use.
 
 ### 2. Start the backend
 
-PowerShell, from the repository root:
-
 ```powershell
-py -3.14 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements.txt
-python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --app-dir backend --env-file .env --reload --host 127.0.0.1 --port 8000
 ```
 
-Verify it:
+The explicit `--env-file .env` loads the configuration copied in step 1. Check the service at `http://127.0.0.1:8000/health`; interactive API documentation is available at `http://127.0.0.1:8000/docs`.
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/health | ConvertTo-Json
-```
+### 3. Start the web interface
 
-Interactive API documentation is available at `http://127.0.0.1:8000/docs`.
-
-### 3. Start the frontend for development
-
-In a second terminal:
+In a second terminal, from the repository root:
 
 ```powershell
 Set-Location frontend
-npm install
+npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`. Vite proxies API requests to the backend on port `8000`.
+Open `http://localhost:5173`. Vite proxies API requests to the backend on port `8000`.
 
-The Vite page and the FastAPI-served production build are two different frontend instances. During development, use the Vite URL. After creating a production build, use the backend URL instead.
+### Optional: Telegram
 
-### 4. Serve a production frontend build from FastAPI
-
-```powershell
-Set-Location frontend
-npm run build
-Set-Location ..
-python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
-```
-
-FastAPI detects `frontend/dist` and serves it at `http://127.0.0.1:8000`.
+Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `TELEGRAM_POLLING_ENABLED=true` in `.env`, then restart the backend. Allowed user IDs are comma-separated; an empty allowlist rejects all senders. A webhook adapter is also available, with an optional `TELEGRAM_WEBHOOK_SECRET` check.
 
 ## Configuration
 
-Configuration is loaded from the project-root `.env` by `backend/app/config.py`.
+| Variable | Purpose |
+| --- | --- |
+| `POSEIDON_BASE_URL`, `POSEIDON_MODEL`, `POSEIDON_API_KEY` | Default inference endpoint and credentials |
+| `POSEIDON_MAX_ITERATIONS`, `POSEIDON_MAX_TOOL_CALLS` | Per-turn execution limits; both default to `5` |
+| `POSEIDON_DB_PATH` | SQLite database location |
+| `POSEIDON_CHECKPOINT_DB_PATH` | LangGraph checkpoint database; defaults beside `POSEIDON_DB_PATH` |
+| `AGENTS_DIR`, `LLM_CONFIG_PATH` | Agent definitions and persisted model overrides |
+| `POSEIDON_CONSOLIDATION_THRESHOLD` | Threshold for automatic memory consolidation; defaults to `30` |
+| `POSEIDON_EMBEDDING_MODEL`, `POSEIDON_EMBEDDING_DIM` | Embedding model and matching vector dimension |
+| `POSEIDON_API_TOKEN` | Bearer token required for remote operator requests |
+| `POSEIDON_CORS_ORIGINS` | Explicit allowed origins, supplied as a JSON array |
 
-### Model and server
+See [.env.example](.env.example) for additional options and [config.py](backend/app/config.py) for defaults. Restart the backend after changing environment configuration.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `POSEIDON_BASE_URL` | NVIDIA-compatible endpoint | OpenAI-compatible inference base URL |
-| `POSEIDON_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | Model identifier sent to the provider |
-| `POSEIDON_API_KEY` | empty | Generic API key for the configured endpoint |
-| `OPENROUTER_API_KEY` | empty | OpenRouter credential fallback |
-| `NVIDIA_API_KEY` | empty | NVIDIA NIM credential |
-| `KRAKEN_API_KEY` | empty | OpenAI-compatible paid-provider credential |
-| `POSEIDON_HOST` | `127.0.0.1` | Backend bind address |
-| `POSEIDON_PORT` | `8000` | Backend port |
+## Repository structure
 
-The effective model and provider are visible through `GET /health` and in the frontend Settings/Telemetry views. Restart the backend after changing `.env`; already-created provider clients are cached in process.
-
-### Harness and memory
-
-| Variable | Default | Purpose |
-|---|---:|---|
-| `POSEIDON_MAX_ITERATIONS` | `5` | Maximum model-loop iterations per turn |
-| `POSEIDON_MAX_TOOL_CALLS` | `5` | Maximum executed tool calls per turn |
-| `POSEIDON_NOTE_MAX_LENGTH` | `500` | Maximum note/reminder length |
-| `POSEIDON_NOTE_MAX_TOTAL` | `500` | Maximum stored notes plus reminders |
-| `POSEIDON_OPERATOR_PIN` | empty | Optional step-up PIN for approvals |
-| `POSEIDON_CONSOLIDATION_THRESHOLD` | `30` | Unconsolidated events required before automatic consolidation |
-| `POSEIDON_EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-transformers embedding model |
-| `POSEIDON_EMBEDDING_DIM` | `384` | Embedding dimension; must match the model |
-
-### Telegram
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | empty | Telegram bot token |
-| `TELEGRAM_POLLING_ENABLED` | `false` | Start the local long poller with FastAPI |
-| `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated Telegram sender IDs |
-| `TELEGRAM_WEBHOOK_SECRET` | empty | Optional webhook secret-token check |
-
-Set `TELEGRAM_ALLOWED_USER_IDS` before enabling Telegram. An empty allowlist rejects all senders; verified senders map to the internal `local_owner`.
-
-## API overview
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Runtime, model, capabilities, and Telegram status |
-| `POST` | `/chat` | Execute one agent turn (accepts `thread_id`, `agent_id`) |
-| `POST` | `/chat/approve` | Approve or deny a parked tool call |
-| `POST` | `/security/inspect-tool` | Inspect tool-call risk and parameter differences |
-| `GET` | `/memory/semantic` | Read/search semantic facts |
-| `GET` | `/memory/episodic` | Read/retrieve episodic events |
-| `GET` | `/memory/procedural` | List or match procedural skills |
-| `GET` | `/memory/status` | Memory and consolidation status |
-| `POST` | `/memory/consolidate` | Trigger consolidation |
-| `GET/POST/PUT/DELETE` | `/agents...` | Manage file-backed agent definitions |
-| `GET/PUT` | `/settings/llm...` | Inspect or update per-agent model configuration |
-| `GET` | `/gateway/events` | Query durable SQLite audit/gateway event ledger |
-| `GET` | `/audit/events` | Query bounded, redacted audit events |
-| `DELETE` | `/audit/events` | Owner-initiated audit log deletion |
-| `GET` | `/runs/{run_id}/trajectory` | Read a persisted execution trajectory |
-| `POST` | `/gateway/telegram/webhook` | Receive a Telegram update (requires `TELEGRAM_WEBHOOK_SECRET` if set) |
-
-Example chat request:
-
-```powershell
-$body = @{
-  text = "Remember that I prefer concise answers."
-  thread_id = "example-session"
-  user_id = "local_user"
-  channel = "web"
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://127.0.0.1:8000/chat" `
-  -ContentType "application/json" `
-  -Body $body
+```text
+backend/
+  app/
+    agents/          Conversational and summarizer agents
+    db/              SQLite connections and migrations
+    gateway/         REST and Telegram adapters
+    memory/          Retrieval, storage, and consolidation
+    orchestration/   Execution graph, checkpoints, and approvals
+    security/        Identity, redaction, risk checks, and auditing
+    tools/           Tool registry, policy, and personal data repositories
+  scripts/           Integration and release checks
+  tests/             Backend test suite
+frontend/
+  src/               React interface and frontend tests
+memory-store/        Agent and skill files; local runtime data
 ```
 
-## Local persistence
+Runtime locations are configurable. The current settings default the database, agent directory, and model configuration to the repository's `memory-store/`; use `POSEIDON_DB_PATH`, `AGENTS_DIR`, and `LLM_CONFIG_PATH` to select another location. Browser chat history is stored separately in `localStorage`.
 
-| Path | Contents |
-|---|---|
-| `memory-store/state.db` | Episodic events, vectors, semantic facts, and FTS5 index |
-| `memory-store/notes.json` | Notes and reminders |
-| `memory-store/calendar.json` | Poseidon-local calendar records |
-| `memory-store/crm_data.json` | Poseidon-local contacts |
-| `memory-store/memory/MEMORY.md` | Generated readable semantic-memory mirror |
-| `memory-store/agents/*.soul.md` | Agent definitions and personas |
-| `memory-store/skills/*.SKILL.md` | Procedural playbooks |
-| `memory-store/llm_config.json` | Runtime per-agent provider overrides |
-| `memory-store/mcp_config.json` | MCP server configuration placeholder |
+LangGraph checkpoints use `memory-store/checkpoints.db` by default. On first startup after this change, Poseidon copies existing checkpoints from `state.db` if the new checkpoint database is empty.
 
-Frontend chat sessions are stored separately in browser `localStorage`. They are UI history, not the backend's long-term memory. Opening the Vite frontend and the FastAPI-served build can therefore show different browser-side histories because they use different origins.
+## Validation
 
-## Testing and checks
-
-Backend:
+Run backend tests from the repository root with the virtual environment active:
 
 ```powershell
-.\.venv\Scripts\python -m pytest backend\tests -q
+python -m pytest backend\tests -q
 ```
 
-Offline core release gate (runs integration scenarios + full backend suite + frontend lint/tests, verifies real `memory-store/` is unchanged):
+Run frontend checks from `frontend/`:
 
 ```powershell
-.\.venv\Scripts\python backend\scripts\run_gate.py
-```
-
-Frontend:
-
-```powershell
-Set-Location frontend
-npm run lint        # oxlint — must exit 0 warnings
-npm test -- --run   # Vitest — 19 tests across 4 suites
+npm run lint
+npm test
 npm run build
 ```
 
-Tests use temporary databases and storage paths redirected by `conftest.py` environment overrides. The real `memory-store/` directory is never written by the test suite.
+The combined release check runs integration scenarios, backend tests, and frontend lint/tests with isolated storage and verifies that repository `memory-store/` files remain unchanged:
 
-## Current limitations
+```powershell
+python backend\scripts\run_gate.py
+```
 
-These are current implementation facts, not future promises:
+## Scope and constraints
 
-- Operator APIs use loopback trust in local mode and require `Authorization: Bearer <POSEIDON_API_TOKEN>` for remote requests. Request body/query identity is ignored. Non-loopback configuration requires a token and explicit `POSEIDON_CORS_ORIGINS` (a JSON array). Wildcard `*` origins are rejected at startup.
-- Notes, reminders, CRM contacts, calendar records, and procedural skills are shared local stores rather than fully user-scoped repositories.
-- Tool execution uses an in-process guard (timeout + parameter validation). This is **not** adversarial container or OS-level sandbox isolation; it does not protect against malicious native code.
-- The taint/risk analyzer exists and is used during Telegram processing. The graph's static tool tier is the primary policy; taint provides additional escalation signals but does not yet replace the static tier for all channels.
-- DLP and prompt-risk detection are deterministic pattern-based safeguards, not comprehensive data-loss prevention or prompt-injection guarantees.
-- MCP registration infrastructure exists but external server lifecycle/discovery is not a complete general-purpose MCP client runtime.
-- CORS uses an explicit origin list; wildcard origins are rejected at startup.
-- The semantic `MEMORY.md` mirror is a single generated file and can be overwritten when different user IDs are consolidated.
-- Telegram delivery is restart-safe and deduplication-backed by SQLite, but the adapter does not yet retry failed updates automatically after a crash.
+Poseidon is designed for a personal, local deployment. Remote operator requests require a bearer token, and non-loopback configuration requires explicit CORS origins. These controls do not constitute a full multi-user account system.
 
-For the full hardening plan and milestone history see [finalplan.md](docs/superpowers/plans/finalplan.md).
-
-## Design intent
-
-Poseidon is currently best understood as a single-user, local-first agent laboratory: it exposes how memory hydration, tool calling, approvals, safety checks, agent routing, and observability fit together without hiding the execution loop. The roadmap retains LangGraph while improving identity ownership, durable approvals/checkpoints, user-scoped storage, unified policy enforcement, memory lifecycle management, and channel idempotency.
+Tool handlers run in process with validation and timeouts. Pattern-based redaction and prompt-risk checks provide additional safeguards, but do not guarantee detection of every secret or malicious instruction. External MCP server discovery and lifecycle management remain incomplete. Telegram updates are durably deduplicated, while failed updates require manual recovery rather than automatic retry.

@@ -1,4 +1,4 @@
-"""Integration tests for Memory API endpoints (Person C — Stage 6)."""
+"""Integration tests for memory API endpoints."""
 
 import gc
 import tempfile

@@ -7,6 +7,7 @@ from langchain_core.messages import ToolMessage
 from app.models import ConversationKey, ActorContext, InboundEvent
 from app.orchestration.graph import HarnessRuntime, HarnessServices, run_agent, resume_approval
 from app.orchestration.approval_store import ApprovalStore, ExecutionStore
+from app.security.sandbox import ExecutionTimeoutError
 
 
 def event(thread='test-thread', text='hello'):
@@ -110,6 +111,64 @@ def test_execution_repository_survives_reconstruction_and_checks_arguments(tmp_p
 
 
 @pytest.mark.asyncio
+async def test_uncertain_tool_outcome_stops_run_without_retry(tmp_path):
+    llm = AsyncMock(side_effect=[{'tool_calls': [call('crm_read', 'uncertain')]},
+                                 {'tool_calls': [call('crm_read', 'retry')]}])
+    executor = AsyncMock(side_effect=ExecutionTimeoutError('write still running'))
+    deps = services(tmp_path / 'uncertain.db', llm, executor)
+    runtime = HarnessRuntime(InMemorySaver(), deps)
+
+    result = await run_agent(event(), 'uncertain-run', runtime=runtime)
+
+    assert 'uncertain' in result['reply'].lower()
+    assert llm.await_count == 1
+    assert executor.await_count == 1
+    assert deps.executions.get('uncertain-run', call('crm_read', 'uncertain'))['status'] == 'running'
+    await run_agent(event(), 'uncertain-run', runtime=runtime)
+    assert executor.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_external_result_requires_approval_for_following_native_tool(tmp_path, monkeypatch):
+    from app.tools.mcp_manager import mcp_manager
+
+    monkeypatch.setattr(mcp_manager, '_mcp_tools', dict(mcp_manager._mcp_tools))
+    mcp_manager.register_dynamic_tool('external_lookup', 'Fetch untrusted content',
+                                      {'properties': {}, 'required': []}, lambda: {'text': 'external result'})
+    llm = AsyncMock(side_effect=[{'tool_calls': [call('external_lookup', 'read-external'), call('crm_read', 'read-local')]},
+                                 {'content': 'done'}])
+    deps = services(tmp_path / 'provenance.db', llm, schemas=['external_lookup', 'crm_read'])
+    deps.tool_tier = None
+    runtime = HarnessRuntime(InMemorySaver(), deps)
+
+    first = await run_agent(event(), 'provenance-run', runtime=runtime)
+    assert first['approval_request']['tool_name'] == 'external_lookup'
+    second = await resume_approval(first['approval_request']['id'], 'approved', runtime=runtime)
+
+    assert second['approval_request']['tool_name'] == 'crm_read'
+    assert deps.tool_executor.await_count == 1
+    snapshot = await runtime.graph.aget_state(runtime.config('provenance-run'))
+    assert snapshot.values['is_tainted'] is True
+    assert 'external_lookup' in snapshot.values['taint_sources']
+
+
+@pytest.mark.asyncio
+async def test_approval_binds_to_policy_version_and_rejects_stale_decision(tmp_path):
+    deps = services(tmp_path / 'policy-version.db', AsyncMock(return_value={'tool_calls': [call(title='Meeting', starts_at='2026-10-15T10:00:00Z')]}))
+    deps.tool_tier = None
+    runtime = HarnessRuntime(InMemorySaver(), deps)
+
+    first = await run_agent(event(), 'policy-version-run', runtime=runtime)
+    aid = first['approval_request']['id']
+    assert deps.approvals.get(aid)['policy_version'] == deps.tool_policy.policy_version
+
+    deps.tool_policy.policy_version = 'new-policy'
+    with pytest.raises(ValueError, match='policy version'):
+        await resume_approval(aid, 'approved', runtime=runtime)
+    deps.tool_executor.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_tool_limit_closes_protocol_for_every_call(tmp_path, monkeypatch):
     from app.config import settings
     monkeypatch.setattr(settings, 'poseidon_max_tool_calls', 1)
@@ -189,18 +248,28 @@ def test_hydration_telemetry_cannot_mutate_other_requests(monkeypatch):
 @pytest.mark.asyncio
 async def test_async_sqlite_interrupt_restart_resume_executes_once(tmp_path):
     sqlite = pytest.importorskip('langgraph.checkpoint.sqlite.aio', reason='SQLite checkpoint package is not installed in the supplied venv')
+    from app.db.checkpoint_migration import copy_legacy_checkpoints
     db = tmp_path / 'restart.db'
+    checkpoint_db = tmp_path / 'checkpoints.db'
     executor = AsyncMock(return_value={'created': 'one'})
     first_llm = AsyncMock(return_value={'tool_calls': [call(title='Meeting')]})
     async with sqlite.AsyncSqliteSaver.from_conn_string(str(db)) as saver:
         await saver.setup()
+        await saver.conn.execute('PRAGMA journal_mode=WAL')
+        await saver.conn.execute('PRAGMA busy_timeout=5000')
+        await saver.conn.commit()
         runtime = HarnessRuntime(saver, services(db, first_llm, executor))
         first = await run_agent(event(), 'restart-run', runtime=runtime)
         aid = first['approval_request']['id']
         executor.assert_not_awaited()
     second_llm = AsyncMock(return_value={'content': 'Created after restart'})
-    async with sqlite.AsyncSqliteSaver.from_conn_string(str(db)) as saver:
+    async with sqlite.AsyncSqliteSaver.from_conn_string(str(checkpoint_db)) as saver:
         await saver.setup()
+        assert copy_legacy_checkpoints(db, checkpoint_db)
+        assert not copy_legacy_checkpoints(db, checkpoint_db)
+        await saver.conn.execute('PRAGMA journal_mode=WAL')
+        await saver.conn.execute('PRAGMA busy_timeout=5000')
+        await saver.conn.commit()
         runtime = HarnessRuntime(saver, services(db, second_llm, executor))
         result = await resume_approval(aid, 'approved', runtime=runtime)
         assert result['reply'] == 'Created after restart'

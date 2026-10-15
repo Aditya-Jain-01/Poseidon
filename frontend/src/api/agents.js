@@ -1,5 +1,5 @@
 /**
- * Agents and Settings API calls for Person C.
+ * Agents and settings API calls.
  */
 import { api } from './client';
 

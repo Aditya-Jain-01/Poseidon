@@ -17,6 +17,7 @@ from app.gateway.memory_adapter import router as memory_router
 from app.gateway.agents_adapter import router as agents_router
 from app.gateway.trajectory_adapter import router as trajectory_router
 from app.db.migrations import apply_migrations
+from app.db.checkpoint_migration import copy_legacy_checkpoints
 from app.db.connection import connection
 from app.startup_checks import check_runtime
 from app.security.identity import resolve_actor, validate_network_config
@@ -38,8 +39,9 @@ async def lifespan(app: FastAPI):
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
     except ImportError:
         raise RuntimeError('Durable runtime requires langgraph-checkpoint-sqlite and aiosqlite') from None
-    async with AsyncSqliteSaver.from_conn_string(str(settings.poseidon_db_path)) as saver:
+    async with AsyncSqliteSaver.from_conn_string(str(settings.checkpoint_db_path)) as saver:
         await saver.setup()
+        copy_legacy_checkpoints(settings.poseidon_db_path, settings.checkpoint_db_path)
         await saver.conn.execute('PRAGMA journal_mode=WAL')
         await saver.conn.execute('PRAGMA busy_timeout=5000')
         await saver.conn.execute('PRAGMA foreign_keys=ON')

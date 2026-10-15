@@ -42,11 +42,16 @@ class Settings(BaseSettings):
     # Consolidation triggers the SummarizerAgent after this many new turns
     poseidon_consolidation_threshold: int = Field(30)
     poseidon_db_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "state.db")
+    poseidon_checkpoint_db_path: Path | None = None
     agents_dir: Path = Field(default=_PROJECT_ROOT / "memory-store" / "agents")
     llm_config_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "llm_config.json")
 
     poseidon_embedding_model: str = Field("all-MiniLM-L6-v2", description="HuggingFace sentence-transformers model name")
     poseidon_embedding_dim: int = Field(384, description="Embedding vector dimension (must match the chosen model)")
+
+    @property
+    def checkpoint_db_path(self) -> Path:
+        return self.poseidon_checkpoint_db_path or self.poseidon_db_path.with_name('checkpoints.db')
 
     model_config = {
         "env_file": str(_PROJECT_ROOT / ".env"),

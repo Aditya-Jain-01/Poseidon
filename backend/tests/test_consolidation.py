@@ -1,4 +1,4 @@
-"""Unit tests for Memory Consolidation pipeline (Person C — Stage 5)."""
+"""Unit tests for the memory consolidation pipeline."""
 
 import gc
 import tempfile

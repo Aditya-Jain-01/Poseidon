@@ -1,7 +1,4 @@
-"""Run Person 1 checks with temporary storage and the invoking interpreter.
-
-This is the M0-M2 verification helper, not the final M7 release gate.
-"""
+"""Run focused backend checks with isolated storage and the invoking interpreter."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -26,7 +23,7 @@ def main():
     if sys.version_info < (3, 11):
         raise SystemExit('Python 3.11+ is required')
     before = hashes()
-    with tempfile.TemporaryDirectory(prefix='poseidon-person1-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='poseidon-core-check-') as tmp:
         env = dict(os.environ)
         env.update(POSEIDON_DB_PATH=str(Path(tmp) / 'state.db'), AGENTS_DIR=str(Path(tmp) / 'agents'), LLM_CONFIG_PATH=str(Path(tmp) / 'llm.json'), TELEGRAM_POLLING_ENABLED='false', HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', TMP=tmp, TEMP=tmp, TMPDIR=tmp)
         suites = ['backend/tests'] if args.full else [f'backend/tests/{name}' for name in ('test_foundation.py', 'test_identity_contract.py', 'test_durable_runtime.py', 'test_harness_approval_resumption.py')]

@@ -2,7 +2,6 @@
   "providers": {
     "local": {
       "base_url": "http://localhost:11434/v1",
-      "api_key": "ollama",
       "default_model": "llama3.2"
     },
     "cloud_free": {
@@ -17,13 +16,12 @@
     },
     "custom": {
       "base_url": "https://integrate.api.nvidia.com/v1",
-      "api_key": "",
       "default_model": "nvidia/nemotron-3-ultra-550b-a55b"
     }
   },
   "agent_overrides": {
-    "octavious": {
-      "preset": "cloud_free"
+    "poseidon": {
+      "preset": "env"
     },
     "nereus": {
       "preset": "cloud_free"
@@ -31,8 +29,8 @@
     "kraken": {
       "preset": "cloud_free"
     },
-    "poseidon": {
-      "preset": "env"
+    "octavious": {
+      "preset": "cloud_free"
     }
   }
 }

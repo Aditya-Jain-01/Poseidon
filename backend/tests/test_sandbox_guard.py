@@ -1,6 +1,7 @@
 """Tests for SandboxGuard capability boundaries."""
 
 import asyncio
+from threading import Event
 import pytest
 from pathlib import Path
 from app.security.sandbox import SandboxGuard, SandboxSecurityError, SandboxTimeoutError
@@ -41,6 +42,27 @@ async def test_sandbox_enforces_execution_timeout():
 
     with pytest.raises(SandboxTimeoutError, match="timed out"):
         await SandboxGuard.execute("slow_tool", slow_tool, {}, timeout_seconds=0.1)
+
+
+@pytest.mark.asyncio
+async def test_synchronous_write_can_finish_after_timeout():
+    release = Event()
+    finished = Event()
+    effects = []
+
+    def slow_write():
+        release.wait(timeout=1)
+        effects.append("written")
+        finished.set()
+
+    try:
+        with pytest.raises(SandboxTimeoutError):
+            await SandboxGuard.execute("write", slow_write, {}, timeout_seconds=0.01)
+        assert effects == []
+    finally:
+        release.set()
+    assert await asyncio.to_thread(finished.wait, 1)
+    assert effects == ["written"]
 
 
 @pytest.mark.asyncio
