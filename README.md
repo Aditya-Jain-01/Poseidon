@@ -61,6 +61,8 @@ Memory hydration assembles context before inference. Completed turns are recorde
 
 Notes, contacts, and calendar records use transactional, owner-scoped SQLite repositories. Calendar events are local to Poseidon; external calendar integration is outside the current scope.
 
+The operator can enter `/pause`, `/resume`, or `/status` in web chat or Telegram. Pause persists in SQLite and blocks new tool execution and approval grants across channels; an already running synchronous handler may still finish. The same controls are available through `POST /security/guardrails/pause`, `POST /security/guardrails/resume`, and `GET /security/guardrails`. Approval requests and attempted Telegram sends have separate rolling hourly limits.
+
 ## Run locally
 
 Requirements: **Python 3.11+**, **Node.js 20.19+ within the 20.x line or 22.12+**, and **npm**. SQLite must support FTS5, JSON functions, and WAL. Startup checks report database capabilities; vector retrieval falls back to Python cosine similarity when the SQLite vector extension is unavailable.
@@ -118,6 +120,8 @@ Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `TELEGRAM_POLLING_ENA
 | --- | --- |
 | `POSEIDON_BASE_URL`, `POSEIDON_MODEL`, `POSEIDON_API_KEY` | Default inference endpoint and credentials |
 | `POSEIDON_MAX_ITERATIONS`, `POSEIDON_MAX_TOOL_CALLS` | Per-turn execution limits; both default to `5` |
+| `POSEIDON_MAX_APPROVAL_REQUESTS_PER_HOUR` | New approval requests per rolling hour; defaults to `5` |
+| `POSEIDON_OUTBOUND_MSG_RATE_LIMIT` | Attempted Telegram sends per rolling hour; defaults to `20` |
 | `POSEIDON_DB_PATH` | SQLite database location |
 | `POSEIDON_CHECKPOINT_DB_PATH` | LangGraph checkpoint database; defaults beside `POSEIDON_DB_PATH` |
 | `AGENTS_DIR`, `LLM_CONFIG_PATH` | Agent definitions and persisted model overrides |
@@ -178,4 +182,4 @@ python backend\scripts\run_gate.py
 
 Poseidon is designed for a personal, local deployment. Remote operator requests require a bearer token, and non-loopback configuration requires explicit CORS origins. These controls do not constitute a full multi-user account system.
 
-Tool handlers run in process with validation and timeouts. Pattern-based redaction and prompt-risk checks provide additional safeguards, but do not guarantee detection of every secret or malicious instruction. External MCP server discovery and lifecycle management remain incomplete. Telegram polling retries failed updates up to `TELEGRAM_MAX_UPDATE_ATTEMPTS` times, then leaves the failed receipt for manual recovery and continues with later updates. Delivery can be repeated if the process stops after Telegram accepts a reply but before completion is recorded.
+Reviewed built-in tool handlers run in process with validation and timeouts; this is not process isolation. Pattern-based redaction and prompt-risk checks provide additional safeguards, but do not guarantee detection of every secret or malicious instruction. Registered MCP handlers are not exposed or executed until an isolated execution boundary exists. Telegram polling retries failed updates up to `TELEGRAM_MAX_UPDATE_ATTEMPTS` times, then leaves the failed receipt for manual recovery and continues with later updates; hitting the outbound limit keeps the update pending for a later retry. Delivery can be repeated if the process stops after Telegram accepts a reply but before completion is recorded.

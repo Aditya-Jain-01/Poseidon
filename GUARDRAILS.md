@@ -1,29 +1,36 @@
-# Poseidon — Guardrail Policy (Source of Truth)
+# Poseidon — Guardrail Policy
 
-> This document is loaded by `config.py` at startup. Do not loosen any rule here
+> This is the operator-reviewed policy contract. Runtime enforcement lives in
+> `backend/app/tools/registry.py`, `backend/app/tools/policy.py`, and
+> `backend/app/security/guardrails.py`; loading this document does not enforce it.
+> Do not loosen any rule here
 > without an explicit, separate confirmation from the human operator. Every
 > relaxation must be logged as a dated change at the bottom of this file.
 
-## 1. Tool Approval Tiers — Fixed for v1
+## 1. Tool Approval Tiers
 
 ### Auto-run (read-only, no side effects)
 
 - `crm_read`
-- `calendar` — read/lookup only
-- `notes_reminders` — read only
-- `skill_manage` — read only
-- `mcp_client` — only for calls on an explicit, human-reviewed allowlist of read-only MCP tools (see §4)
+- `calendar_read`
+- `notes_reminders_read`
+- `skill_manage_read`
+
+### Guarded auto-run
+
+- `notes_reminders_create` — benign content only; suspicious content requires approval and adversarial content is rejected (see the 2026-09-07 change below)
 
 ### Approval required, every time, no exceptions
 
 - `crm_write`
-- `calendar` — create / update / delete
-- `notes_reminders` — create / update / delete
-- `cronjob` — registering, editing, or deleting a scheduled run
-- `delegate_task` — kept in this tier for v1, not auto-run, even though it inherits the parent's guardrails (see §6 for when this can change)
-- `skill_manage` — write
-- `mcp_client` — any call not on the read-only allowlist
+- `calendar_create`
+- `notes_reminders_delete`
+- `skill_manage_write`
 - Any tool not explicitly listed above, including anything added later
+
+`cronjob`, `delegate_task`, and MCP tools are not active built-in tools. When
+introduced, they require approval by default; unreviewed MCP handlers remain
+disabled until an isolation design is implemented.
 
 **No auto-trust promotion.** The system must never move a tool from "approval required" to "auto-run" based on a pattern of past approvals, a config heuristic, or model judgment. The only way a tool's tier changes is a human editing this document and the corresponding config, on purpose.
 
@@ -40,12 +47,12 @@ A cronjob can fire when the operator is not in an active conversation, so there'
 
 - **Default contact allowlist = operator only.** The agent may only send messages to the channel thread/contact that originated the conversation (i.e., replying to the operator) unless a contact is explicitly added to an allowlist the operator controls.
 - Any outbound message to a contact not on that allowlist requires approval every time — no exceptions, and this cannot be promoted to auto-run (§1's "no auto-trust promotion" applies doubly here).
-- **Rate limit outbound messages** — a hard cap on messages per hour (default: 20), configurable. Hitting the cap pauses further sends and notifies the operator.
+- **Rate limit outbound messages** — a hard cap on attempted Telegram sends per rolling hour (default: 20), configurable. Failed sends and retries count. Hitting the cap blocks further sends and records one operator-visible audit alert per UTC hour.
 - The agent must not forward message content (the operator's or a contact's) to an external tool or MCP server without that call already being subject to the normal approval tier for that tool.
 
 ## 4. MCP Client — Fail-Safe Classification
 
-- No MCP tool is treated as read-only until it's on an explicit, human-reviewed allowlist approved by name.
+- No MCP tool is treated as read-only until it's on an explicit, human-reviewed allowlist approved by name. No such allowlist or auto-run MCP execution is active today.
 - Anything not on that allowlist — including a tool that merely looks read-only — defaults to approval-required.
 - When a new MCP server is connected, its available tools are listed back to the operator for classification before any of them are auto-run.
 
@@ -65,12 +72,12 @@ Only after the operator has used the system and explicitly asks for a specific r
 - Update this document with a dated entry describing exactly what changed and why.
 - Scope the change as narrowly as possible — loosen one tool or one contact at a time, not a whole tier at once.
 
-## 7. Rate and Kill-Switch Guardrails
+## 7. Rate and Pause Guardrails
 
 In addition to the per-run `max_iterations` / `max_tool_calls`:
 
-- **Max approval requests per hour** — default: 5. If the agent generates an unreasonable number, stop and surface a single alert instead of flooding the operator.
-- **Pause/kill command** — one command, reachable from any connected channel, that immediately stops all tool execution across every channel and cronjob until the operator explicitly resumes.
+- **Max approval requests per rolling hour** — default: 5. Once reached, reject new approval requests and record one operator-visible audit alert per UTC hour. A resumed/replayed request does not consume another slot.
+- **Pause command** — `/pause` and `/resume` in web chat or Telegram, or the authenticated `/security/guardrails/pause` and `/security/guardrails/resume` API routes. `/status` reports the state in either chat. Pause persists across restarts and prevents new tool execution and approval grants. An in-flight synchronous handler cannot be stopped safely; inspect its outcome before retrying.
 
 ## 8. Audit Trail
 

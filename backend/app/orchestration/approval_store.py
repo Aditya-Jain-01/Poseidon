@@ -8,6 +8,7 @@ from app.config import settings
 from app.db.connection import connection
 from app.db.migrations import apply_migrations
 from app.models import ConversationKey
+from app.security.guardrails import GuardrailRateLimitError, HarnessPausedError, record_limit_alert
 
 
 def canonical_json(value):
@@ -39,13 +40,28 @@ class ApprovalStore:
                   tool_call['name'], canonical_json(tool_call.get('arguments', {})), argument_hash(tool_call.get('arguments', {})),
                   policy_version, timestamp.isoformat(), (timestamp + timedelta(seconds=settings.poseidon_approval_timeout_seconds)).isoformat())
         with connection(self.db_path) as conn:
-            with conn:
-                conn.execute("INSERT INTO approvals(approval_id,run_id,owner_id,conversation_key_json,tool_call_id,tool_name,canonical_arguments_json,arguments_hash,policy_version,created_at,expires_at,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending') ON CONFLICT(run_id,tool_call_id) DO NOTHING", values)
+            conn.execute('BEGIN IMMEDIATE')
+            try:
                 row = conn.execute('SELECT * FROM approvals WHERE run_id=? AND tool_call_id=?', (run_id, tool_call['id'])).fetchone()
+                if row is None:
+                    if conn.execute('SELECT paused FROM guardrail_state WHERE id=1').fetchone()[0]:
+                        raise HarnessPausedError('Tool execution is paused by the operator')
+                    cutoff = (timestamp - timedelta(hours=1)).isoformat()
+                    count = conn.execute('SELECT COUNT(*) FROM approvals WHERE created_at>=?', (cutoff,)).fetchone()[0]
+                    if count >= settings.poseidon_max_approval_requests_per_hour:
+                        record_limit_alert(conn, 'approval', timestamp)
+                        conn.commit()
+                        raise GuardrailRateLimitError('Approval request limit reached for this hour')
+                    conn.execute("INSERT INTO approvals(approval_id,run_id,owner_id,conversation_key_json,tool_call_id,tool_name,canonical_arguments_json,arguments_hash,policy_version,created_at,expires_at,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending')", values)
+                    row = conn.execute('SELECT * FROM approvals WHERE run_id=? AND tool_call_id=?', (run_id, tool_call['id'])).fetchone()
                 if row['arguments_hash'] != values[7] or row['tool_name'] != tool_call['name'] or row['conversation_key_json'] != values[3]:
                     raise ValueError('Approval replay changed its execution binding')
                 if row['policy_version'] != policy_version:
                     raise ValueError('Approval policy version mismatch')
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
         return self.public(dict(row))
 
     def expire_pending(self):

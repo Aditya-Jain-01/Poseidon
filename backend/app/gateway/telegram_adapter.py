@@ -31,6 +31,7 @@ from app.models import ConversationKey
 from app.security.audit import audit_service
 from app.security.identity import telegram_actor
 from app.security.taint import is_channel_untrusted
+from app.security.guardrails import guardrail_store, GuardrailRateLimitError
 
 
 router = APIRouter(prefix="/gateway/telegram", tags=["Telegram Gateway"])
@@ -197,6 +198,7 @@ async def send_telegram_reply(bot_token: str, chat_id: int | str, text: str) -> 
 
 
 async def deliver_reply(bot_token: str, chat_id: int | str, text: str) -> None:
+    guardrail_store.reserve_outbound_attempt('telegram')
     if not await send_telegram_reply(bot_token, chat_id, text):
         raise RuntimeError("Telegram reply delivery failed")
 
@@ -252,6 +254,23 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
     )
     user_id = actor.owner_id
     token = bot_token or getattr(settings, "telegram_bot_token", "")
+
+    command = text.lower().strip()
+    if command in {'/pause', '/resume', '/status'}:
+        if command == '/pause':
+            guardrail_store.set_paused(True)
+            reply_text = 'Poseidon is paused. Tool execution is disabled until /resume.'
+        elif command == '/resume':
+            guardrail_store.set_paused(False)
+            reply_text = 'Poseidon resumed. Tool execution is enabled.'
+        else:
+            reply_text = 'Poseidon is paused.' if guardrail_store.is_paused() else 'Poseidon is active.'
+        audit_service.record_event(run_id=run_id, owner_id=actor.owner_id, channel='telegram',
+                                   direction='internal', event_type='guardrail_command', status='completed',
+                                   payload={'command': command, 'paused': guardrail_store.is_paused()})
+        await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
+        return {'status': 'processed', 'run_id': run_id, 'reply': reply_text,
+                'chat_id': chat_id, 'sender_id': sender_id}
 
     if update_id is not None:
         staged = staged_update_reply(update_id)
@@ -441,6 +460,10 @@ class TelegramLongPoller:
                                 record_update_receipt(update_id, run_id, payload_hash)
                             try:
                                 await process_telegram_update(update, bot_token=self.bot_token)
+                            except GuardrailRateLimitError:
+                                # Keep the same update pending until the rolling send window clears.
+                                await asyncio.sleep(60)
+                                break
                             except Exception:
                                 if not update_id or update_attempt_count(update_id) < settings.telegram_max_update_attempts:
                                     raise

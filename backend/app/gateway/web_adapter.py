@@ -22,6 +22,7 @@ from app.security.identity import resolve_actor
 from app.security.secrets import redact
 from app.security.taint import calculate_overall_risk
 from app.security.risk_analyzer import RiskAnalyzer
+from app.security.guardrails import guardrail_store, GuardrailRateLimitError, HarnessPausedError
 
 
 class ChatRequest(BaseModel):
@@ -90,6 +91,20 @@ async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends
         agent_id=req.agent_id,
         payload={'text': req.text, 'thread_id': req.thread_id or 'default'},
     )
+    command = req.text.strip().lower()
+    if command in {'/pause', '/resume', '/status'}:
+        if command == '/pause':
+            guardrail_store.set_paused(True)
+        elif command == '/resume':
+            guardrail_store.set_paused(False)
+        paused = guardrail_store.is_paused()
+        reply = ('Poseidon is paused. Tool execution is disabled until /resume.' if paused
+                 else 'Poseidon is active. Tool execution is enabled.')
+        audit_service.record_event(run_id=run_id, owner_id=actor.owner_id, channel='web',
+                                   direction='internal', event_type='guardrail_command', status='completed',
+                                   payload={'command': command, 'paused': paused})
+        return ChatResponse(reply=reply, run_id=run_id, thread_id=event.conversation_key.thread_id,
+                            conversation_key=event.conversation_key)
     try:
         from app.orchestration.router import route_request, UnknownAgentError
         target_agent = route_request(req.text, explicit_agent_id=req.agent_id)
@@ -105,6 +120,9 @@ async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends
             payload={'agent_id': e.agent_id, 'available': e.available},
         )
         return JSONResponse(status_code=422, content={"error": "unknown_agent", "agent_id": e.agent_id, "available_agent_ids": e.available, "run_id": run_id})
+    except (GuardrailRateLimitError, HarnessPausedError) as e:
+        return JSONResponse(status_code=429 if isinstance(e, GuardrailRateLimitError) else 423,
+                            content={"error": type(e).__name__, "detail": str(e), "run_id": run_id})
     except Exception as e:
         audit_service.record_event(
             run_id=run_id,
@@ -161,6 +179,31 @@ async def approve(req: ApprovalDecisionRequest, actor: ActorContext = Depends(re
         return JSONResponse(status_code=404, content={"error": redact(str(exc))})
     except ValueError as exc:
         return JSONResponse(status_code=422, content={"error": redact(str(exc))})
+    except HarnessPausedError as exc:
+        return JSONResponse(status_code=423, content={"error": str(exc)})
+
+
+@router.get('/security/guardrails')
+async def guardrail_status(actor: ActorContext = Depends(resolve_actor)):
+    alerts = audit_service.query_events(owner_id=actor.owner_id, run_id='guardrails', limit=10)
+    return {'paused': guardrail_store.is_paused(),
+            'limit_alerts': [event for event in alerts if event['event_type'] == 'guardrail_limit']}
+
+
+@router.post('/security/guardrails/pause')
+async def pause_guardrails(actor: ActorContext = Depends(resolve_actor)):
+    guardrail_store.set_paused(True)
+    audit_service.record_event(run_id='guardrails', owner_id=actor.owner_id, channel='web',
+                               direction='internal', event_type='guardrails_paused', status='completed')
+    return {'paused': True}
+
+
+@router.post('/security/guardrails/resume')
+async def resume_guardrails(actor: ActorContext = Depends(resolve_actor)):
+    guardrail_store.set_paused(False)
+    audit_service.record_event(run_id='guardrails', owner_id=actor.owner_id, channel='web',
+                               direction='internal', event_type='guardrails_resumed', status='completed')
+    return {'paused': False}
 
 
 @router.post("/security/inspect-tool")

@@ -8,6 +8,7 @@ from typing import Any
 from app.models import ToolCall, ToolExecutionContext
 from app.security.secrets import redact
 from app.security.sandbox import ExecutionGuard
+from app.security.guardrails import guardrail_store
 from app.tools.registry import get_tool
 
 
@@ -23,6 +24,11 @@ class ToolExecutionService:
         tool = get_tool(call.name)
         if tool is None:
             raise ValueError("Unknown tool")
+        if tool['trusted_provenance'] != 'built_in':
+            raise PermissionError('External handlers are disabled until isolated execution is available')
+        if tool['base_tier'] == 'approval_required' and not approval_granted:
+            raise PermissionError('This tool requires an approved execution')
+        guardrail_store.require_active()
         arguments = dict(call.arguments)
         signature = inspect.signature(tool['handler'])
         if 'owner_id' in signature.parameters:

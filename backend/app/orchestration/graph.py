@@ -18,6 +18,7 @@ from app.security.risk_analyzer import RiskAnalyzer
 from app.security.note_guard import NoteGuard
 from app.security.secrets import redact
 from app.security.sandbox import ExecutionTimeoutError
+from app.security.guardrails import GuardrailStore, HarnessPausedError
 from app.security.taint import is_channel_untrusted
 from app.tools.registry import get_tool, get_tools_for_agent
 from app.tools.policy import ToolPolicyService
@@ -37,10 +38,13 @@ class HarnessServices:
     tool_tier: Callable | None = None
     tool_policy: ToolPolicyService = field(default_factory=ToolPolicyService)
     tool_execution_service: ToolExecutionService = field(default_factory=ToolExecutionService)
+    guardrails: GuardrailStore | None = None
 
     def __post_init__(self):
         if self.executions is None:
             self.executions = ExecutionStore(self.approvals.db_path)
+        if self.guardrails is None:
+            self.guardrails = GuardrailStore(self.approvals.db_path)
 
 
 def _allowed(services, agent_id, name):
@@ -144,6 +148,8 @@ def build_graph(checkpointer, services):
         external_result = bool(tool and tool['trusted_provenance'] != 'built_in')
         if state['policy_decision']['decision'] == 'deny' or state.get('approval_status') == 'denied':
             return _finish_call(state, {'error': 'denied', 'detail': 'Action denied. No changes were made.'})
+        if services.guardrails.is_paused():
+            return _finish_call(state, {'error': 'paused', 'detail': 'Tool execution is paused by the operator.'})
         if not _allowed(services, state['active_agent'], call['name']):
             return _finish_call(state, {'error': 'permission_denied'})
         if state['tool_call_count'] >= settings.poseidon_max_tool_calls:
@@ -185,7 +191,7 @@ def build_graph(checkpointer, services):
 
     def after_tool(state):
         last_result = state['tool_results'][-1]['result']
-        if isinstance(last_result, dict) and last_result.get('error') == 'execution_uncertain':
+        if isinstance(last_result, dict) and last_result.get('error') in {'execution_uncertain', 'paused'}:
             return 'end'
         return 'select' if state.get('pending_tool_calls') else 'agent'
 
@@ -277,8 +283,12 @@ async def run_agent(event: InboundEvent, run_id: str, agent_id=DEFAULT_PRIMARY_A
 
 async def resume_approval(approval_id, decision, *, owner_id='local_owner', conversation_key=None, runtime=None):
     runtime = get_runtime(runtime)
+    if decision == 'approved':
+        runtime.services.guardrails.require_active()
     request = runtime.services.approvals.get(approval_id)
     async with runtime.lock(request['run_id']):
+        if decision == 'approved':
+            runtime.services.guardrails.require_active()
         request = runtime.services.approvals.get(approval_id)
         config = runtime.config(request['run_id'])
         snapshot = await runtime.graph.aget_state(config)

@@ -90,7 +90,13 @@ TELEGRAM_AND_AUDIT_SQL = (
     "CREATE INDEX idx_trajectory_steps_run ON trajectory_steps(run_id, step_index)",
 )
 MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL), (4, TELEGRAM_AND_AUDIT_SQL),
-              (5, ("ALTER TABLE telegram_updates ADD COLUMN outbound_json TEXT",)))
+              (5, ("ALTER TABLE telegram_updates ADD COLUMN outbound_json TEXT",)),
+              (6, (
+                  "CREATE TABLE guardrail_state (id INTEGER PRIMARY KEY CHECK(id=1), paused INTEGER NOT NULL DEFAULT 0 CHECK(paused IN (0,1)), updated_at TEXT NOT NULL)",
+                  "INSERT INTO guardrail_state(id,paused,updated_at) VALUES (1,0,CURRENT_TIMESTAMP)",
+                  "CREATE TABLE outbound_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, created_at TEXT NOT NULL)",
+                  "CREATE INDEX idx_outbound_attempts_created ON outbound_attempts(created_at)",
+              )))
 
 
 def apply_migrations(db_path, embedding_dim=384):

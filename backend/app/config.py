@@ -25,8 +25,8 @@ class Settings(BaseSettings):
 
     poseidon_max_iterations: int = Field(5)
     poseidon_max_tool_calls: int = Field(5)
-    poseidon_max_approval_requests_per_hour: int = Field(5)
-    poseidon_outbound_msg_rate_limit: int = Field(20)
+    poseidon_max_approval_requests_per_hour: int = Field(5, ge=1)
+    poseidon_outbound_msg_rate_limit: int = Field(20, ge=1)
     poseidon_cronjob_approval_timeout_hours: int = Field(12)
 
     poseidon_note_max_length: int = Field(500, description="Max character length for a single note/reminder.")
@@ -60,15 +60,4 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
-
-
-def load_guardrails_doc() -> str:
-    """Load GUARDRAILS.md from the project root. Returns empty string if missing."""
-    path = _PROJECT_ROOT / "GUARDRAILS.md"
-    if path.exists():
-        return path.read_text(encoding="utf-8")
-    return ""
-
-
 settings = Settings()
-guardrails_doc = load_guardrails_doc()

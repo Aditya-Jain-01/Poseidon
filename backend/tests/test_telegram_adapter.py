@@ -179,6 +179,35 @@ async def test_poller_moves_past_update_after_retry_limit():
 
 
 @pytest.mark.asyncio
+async def test_poller_keeps_update_pending_when_outbound_limit_is_reached():
+    from app.gateway.telegram_adapter import TelegramLongPoller
+    from app.security.guardrails import GuardrailRateLimitError
+
+    poller = TelegramLongPoller(bot_token='fake_token')
+    poller.offset = 987000
+    poller._running = True
+    response = MagicMock(status_code=200)
+    response.json.return_value = {'result': [{'update_id': 987000, 'message': {'text': 'hello'}}]}
+    transport = AsyncMock()
+    transport.get.return_value = response
+    transport_context = AsyncMock()
+    transport_context.__aenter__.return_value = transport
+
+    async def stop_after_wait(_seconds):
+        poller._running = False
+
+    with patch('app.gateway.telegram_adapter.httpx.AsyncClient', return_value=transport_context), \
+         patch('app.gateway.telegram_adapter.process_telegram_update', new_callable=AsyncMock) as process, \
+         patch('app.gateway.telegram_adapter.persist_offset') as persist, \
+         patch('app.gateway.telegram_adapter.asyncio.sleep', side_effect=stop_after_wait):
+        process.side_effect = GuardrailRateLimitError('send limit')
+        await poller._poll_loop()
+
+    assert poller.offset == 987000
+    persist.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_telegram_routes_to_poseidon_env_by_default():
     """Verify normal Telegram message routes to Poseidon and resolves to .env provider."""
     from app.llm_providers import llm_provider
