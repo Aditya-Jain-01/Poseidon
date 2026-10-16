@@ -1,6 +1,5 @@
-"""Tests for MCP tool registration and execution."""
+"""MCP configuration cannot expose in-process external handlers to the agent."""
 
-import asyncio
 import pytest
 from app.tools.mcp_manager import mcp_manager
 from app.tools.registry import get_all_tools, get_tier, execute_tool
@@ -20,17 +19,16 @@ async def test_mcp_dynamic_tool_registration():
     )
 
     all_tools = get_all_tools()
-    assert "custom_echo" in all_tools
-    assert get_tier("custom_echo") == "auto"
+    assert "custom_echo" not in all_tools
+    assert get_tier("custom_echo") == "approval_required"
 
-    result = await execute_tool("custom_echo", {"message": "hello"})
-    assert result == "echo: hello"
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await execute_tool("custom_echo", {"message": "hello"})
 
 
 @pytest.mark.asyncio
 async def test_mcp_execute_tool_timeout():
     async def hanging_tool():
-        await asyncio.sleep(10.0)
         return "late"
 
     mcp_manager.register_dynamic_tool(
@@ -43,4 +41,4 @@ async def test_mcp_execute_tool_timeout():
 
     res = await mcp_manager.execute_mcp_tool("hanging_mcp", {})
     assert res.get("status") == "failed"
-    assert "timed out" in res.get("error", "")
+    assert "disabled" in res.get("error", "")

@@ -1,15 +1,12 @@
 """Model Context Protocol (MCP) Client & Tool Registration Manager.
 
-Provides:
-- Declarative loading of MCP servers from memory-store/mcp_config.json.
-- Dynamic discovery and translation of MCP tools into OpenAI-compatible tool schemas.
-- Resilient tool dispatch with execution timeouts and fail-closed error reporting.
+Keeps MCP configuration and proposed tool definitions for future isolated
+execution. Registered handlers are not exposed to the agent or executed.
 """
 
 from __future__ import annotations
 
 import json
-import asyncio
 from pathlib import Path
 from typing import Any, Callable
 
@@ -74,22 +71,8 @@ class MCPManager:
         return dict(self._mcp_tools)
 
     async def execute_mcp_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Execute an MCP tool with timeout and error handling."""
-        tool = self._mcp_tools.get(tool_name)
-        if not tool:
-            return {"error": f"MCP tool '{tool_name}' not found", "status": "failed"}
-
-        handler = tool["handler"]
-        try:
-            if asyncio.iscoroutinefunction(handler):
-                result = await asyncio.wait_for(handler(**arguments), timeout=5.0)
-            else:
-                result = handler(**arguments)
-            return {"status": "success", "result": result}
-        except asyncio.TimeoutError:
-            return {"error": f"MCP tool '{tool_name}' timed out after 5.0s", "status": "failed"}
-        except Exception as exc:
-            return {"error": f"MCP execution failed: {exc}", "status": "failed"}
+        """External handlers require process isolation before they can run."""
+        return {"error": "MCP execution is disabled until isolated execution is available", "status": "failed"}
 
 
 mcp_manager = MCPManager()

@@ -129,7 +129,7 @@ async def test_uncertain_tool_outcome_stops_run_without_retry(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_external_result_requires_approval_for_following_native_tool(tmp_path, monkeypatch):
+async def test_registered_external_tool_is_denied_until_isolated(tmp_path, monkeypatch):
     from app.tools.mcp_manager import mcp_manager
 
     monkeypatch.setattr(mcp_manager, '_mcp_tools', dict(mcp_manager._mcp_tools))
@@ -141,15 +141,12 @@ async def test_external_result_requires_approval_for_following_native_tool(tmp_p
     deps.tool_tier = None
     runtime = HarnessRuntime(InMemorySaver(), deps)
 
-    first = await run_agent(event(), 'provenance-run', runtime=runtime)
-    assert first['approval_request']['tool_name'] == 'external_lookup'
-    second = await resume_approval(first['approval_request']['id'], 'approved', runtime=runtime)
-
-    assert second['approval_request']['tool_name'] == 'crm_read'
+    result = await run_agent(event(), 'provenance-run', runtime=runtime)
+    assert result['approval_request'] is None
     assert deps.tool_executor.await_count == 1
     snapshot = await runtime.graph.aget_state(runtime.config('provenance-run'))
-    assert snapshot.values['is_tainted'] is True
-    assert 'external_lookup' in snapshot.values['taint_sources']
+    assert snapshot.values['is_tainted'] is False
+    assert snapshot.values['tool_results'][0]['result']['error'] == 'denied'
 
 
 @pytest.mark.asyncio
@@ -249,8 +246,11 @@ def test_hydration_telemetry_cannot_mutate_other_requests(monkeypatch):
 async def test_async_sqlite_interrupt_restart_resume_executes_once(tmp_path):
     sqlite = pytest.importorskip('langgraph.checkpoint.sqlite.aio', reason='SQLite checkpoint package is not installed in the supplied venv')
     from app.db.checkpoint_migration import copy_legacy_checkpoints
+    from app.db.migrations import apply_migrations
     db = tmp_path / 'restart.db'
     checkpoint_db = tmp_path / 'checkpoints.db'
+    # Production applies schema migrations before opening the checkpointer.
+    apply_migrations(db)
     executor = AsyncMock(return_value={'created': 'one'})
     first_llm = AsyncMock(return_value={'tool_calls': [call(title='Meeting')]})
     async with sqlite.AsyncSqliteSaver.from_conn_string(str(db)) as saver:

@@ -10,7 +10,6 @@ from app.soul import soul_store
 from app.models import RESERVED_ARGUMENTS
 from app.security.sandbox import ExecutionGuard
 from . import calendar, crm, notes_reminders, skill_manage
-from .mcp_manager import mcp_manager
 
 
 def _schema(name: str, description: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -73,20 +72,8 @@ def validate_registry(registry: dict[str, dict[str, Any]] | None = None) -> None
 
 
 def get_all_tools() -> dict[str, dict[str, Any]]:
-    """Return merged registry of base native tools and discovered MCP tools."""
+    """Expose reviewed built-ins while external handler isolation is unfinished."""
     tools = dict(BASE_TOOL_REGISTRY)
-    discovered = mcp_manager.discover_tools()
-    for name, tool in discovered.items():
-        tool = dict(tool)
-        tool.setdefault('name', name)
-        tool.setdefault('description', tool.get('schema', {}).get('function', {}).get('description', name))
-        tool.setdefault('base_tier', 'approval_required')
-        tool.setdefault('tier', 'approval_required')
-        tool.setdefault('has_side_effects', True)
-        tool.setdefault('timeout_seconds', 5)
-        tool.setdefault('trusted_provenance', 'mcp')
-        tool.setdefault('allowed_agents', [])
-        tools[name] = tool
     validate_registry(tools)
     return tools
 
@@ -114,10 +101,17 @@ def get_tools_for_agent(agent_id: str = "poseidon") -> list[dict[str, Any]]:
 
 
 async def execute_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
-    """Execute a tool within the in-process SandboxGuard least-privilege boundary."""
+    """Execute a reviewed built-in through the in-process validation guard."""
     tool = get_tool(tool_name)
     if not tool:
         raise ValueError(f"Unknown tool: {tool_name}")
+    if tool['trusted_provenance'] != 'built_in':
+        raise PermissionError('External handlers are disabled until isolated execution is available')
+    if tool['base_tier'] != 'auto' or tool['has_side_effects']:
+        raise PermissionError('This helper only executes read-only built-in tools')
+
+    from app.security.guardrails import guardrail_store
+    guardrail_store.require_active()
 
     args = arguments or {}
     handler = tool["handler"]
