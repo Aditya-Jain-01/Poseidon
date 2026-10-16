@@ -89,7 +89,8 @@ TELEGRAM_AND_AUDIT_SQL = (
     "CREATE TABLE trajectory_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, step_index INTEGER NOT NULL, step_type TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(run_id, step_index))",
     "CREATE INDEX idx_trajectory_steps_run ON trajectory_steps(run_id, step_index)",
 )
-MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL), (4, TELEGRAM_AND_AUDIT_SQL))
+MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL), (4, TELEGRAM_AND_AUDIT_SQL),
+              (5, ("ALTER TABLE telegram_updates ADD COLUMN outbound_json TEXT",)))
 
 
 def apply_migrations(db_path, embedding_dim=384):

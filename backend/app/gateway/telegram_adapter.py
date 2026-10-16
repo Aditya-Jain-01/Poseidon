@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -87,22 +88,21 @@ def record_update_receipt(update_id: int, run_id: str, payload_hash: str, db_pat
     """Record receipt of a Telegram update. Returns current status."""
     path = db_path or settings.poseidon_db_path
     if not path.exists():
-        return "received"
+        raise RuntimeError("Telegram receipt database is unavailable")
     now_ts = datetime.now(timezone.utc).isoformat()
-    try:
-        with connection(path) as conn:
-            row = conn.execute("SELECT status FROM telegram_updates WHERE update_id = ?", (update_id,)).fetchone()
-            if row:
-                return row[0]
-            conn.execute(
-                """INSERT INTO telegram_updates 
-                (update_id, status, run_id, attempt_count, payload_hash, received_at, updated_at)
-                VALUES (?, 'received', ?, 0, ?, ?, ?)""",
-                (update_id, run_id, payload_hash, now_ts, now_ts),
-            )
-            conn.commit()
-            return "received"
-    except Exception:
+    with connection(path) as conn:
+        row = conn.execute("SELECT status,payload_hash FROM telegram_updates WHERE update_id = ?", (update_id,)).fetchone()
+        if row:
+            if row["payload_hash"] != payload_hash:
+                raise ValueError("Telegram update ID was reused with different content")
+            return row["status"]
+        conn.execute(
+            """INSERT INTO telegram_updates
+            (update_id, status, run_id, attempt_count, payload_hash, received_at, updated_at)
+            VALUES (?, 'received', ?, 0, ?, ?, ?)""",
+            (update_id, run_id, payload_hash, now_ts, now_ts),
+        )
+        conn.commit()
         return "received"
 
 
@@ -130,17 +130,16 @@ def complete_update(update_id: int, db_path: Path | None = None) -> None:
     """Mark Telegram update completed."""
     path = db_path or settings.poseidon_db_path
     if not path.exists():
-        return
+        raise RuntimeError("Telegram receipt database is unavailable")
     now_ts = datetime.now(timezone.utc).isoformat()
-    try:
-        with connection(path) as conn:
-            conn.execute(
+    with connection(path) as conn:
+        with conn:
+            changed = conn.execute(
                 "UPDATE telegram_updates SET status = 'completed', completed_at = ?, updated_at = ? WHERE update_id = ?",
                 (now_ts, now_ts, update_id),
-            )
-            conn.commit()
-    except Exception:
-        pass
+            ).rowcount
+            if changed != 1:
+                raise RuntimeError("Telegram update receipt is unavailable")
 
 
 def fail_update(update_id: int, error_msg: str, db_path: Path | None = None) -> None:
@@ -160,6 +159,29 @@ def fail_update(update_id: int, error_msg: str, db_path: Path | None = None) -> 
         pass
 
 
+def stage_update_reply(update_id: int, reply: str, chat_id: int | str, sender_id: int | str) -> None:
+    """Keep the reply after the graph finishes so delivery retries do not rerun it."""
+    payload = json.dumps({"reply": reply, "chat_id": chat_id, "sender_id": sender_id})
+    with connection(settings.poseidon_db_path) as conn:
+        with conn:
+            changed = conn.execute("UPDATE telegram_updates SET outbound_json=?, updated_at=? WHERE update_id=?",
+                                   (payload, datetime.now(timezone.utc).isoformat(), update_id)).rowcount
+            if changed != 1:
+                raise RuntimeError("Telegram update receipt is unavailable")
+
+
+def staged_update_reply(update_id: int) -> dict[str, Any] | None:
+    with connection(settings.poseidon_db_path) as conn:
+        row = conn.execute("SELECT outbound_json FROM telegram_updates WHERE update_id=?", (update_id,)).fetchone()
+    return json.loads(row["outbound_json"]) if row and row["outbound_json"] else None
+
+
+def update_attempt_count(update_id: int) -> int:
+    with connection(settings.poseidon_db_path) as conn:
+        row = conn.execute("SELECT attempt_count FROM telegram_updates WHERE update_id=?", (update_id,)).fetchone()
+    return int(row["attempt_count"]) if row else 0
+
+
 async def send_telegram_reply(bot_token: str, chat_id: int | str, text: str) -> bool:
     """Send message back to Telegram chat."""
     if not bot_token:
@@ -172,6 +194,20 @@ async def send_telegram_reply(bot_token: str, chat_id: int | str, text: str) -> 
     except Exception as exc:
         print(f"[TelegramAdapter] Failed to send reply to Telegram: {exc}")
         return False
+
+
+async def deliver_reply(bot_token: str, chat_id: int | str, text: str) -> None:
+    if not await send_telegram_reply(bot_token, chat_id, text):
+        raise RuntimeError("Telegram reply delivery failed")
+
+
+async def send_and_complete(update_id: int | None, bot_token: str, chat_id: int | str,
+                            sender_id: int | str, reply: str) -> None:
+    if update_id is not None:
+        stage_update_reply(update_id, reply, chat_id, sender_id)
+    await deliver_reply(bot_token, chat_id, reply)
+    if update_id is not None:
+        complete_update(update_id)
 
 
 async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -> dict[str, Any]:
@@ -217,6 +253,26 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
     user_id = actor.owner_id
     token = bot_token or getattr(settings, "telegram_bot_token", "")
 
+    if update_id is not None:
+        staged = staged_update_reply(update_id)
+        if staged is not None:
+            try:
+                await deliver_reply(token, staged["chat_id"], staged["reply"])
+                complete_update(update_id)
+            except Exception as exc:
+                fail_update(update_id, str(exc))
+                raise
+            audit_service.record_event(
+                run_id=run_id,
+                owner_id=actor.owner_id,
+                channel="telegram",
+                direction="outbound",
+                event_type="telegram_reply",
+                status="completed",
+                payload={"reply": staged["reply"], "chat_id": staged["chat_id"]},
+            )
+            return {"status": "processed", "run_id": run_id, **staged}
+
     audit_service.record_event(
         run_id=run_id,
         owner_id=actor.owner_id,
@@ -239,10 +295,7 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
             if clean in {"/deny", "deny", "no", "cancel", "reject", "abort"}:
                 res = await resume_approval(pending["id"], "denied", owner_id=actor.owner_id, conversation_key=key)
                 reply_text = res.get("reply", "Action denied. No changes were made.")
-                if token and chat_id:
-                    await send_telegram_reply(token, chat_id, reply_text)
-                if update_id is not None:
-                    complete_update(update_id)
+                await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
                 audit_service.record_event(
                     run_id=run_id,
                     owner_id=actor.owner_id,
@@ -260,17 +313,11 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
                     approved = True
                 elif clean in {"/approve", "approve", "yes", "confirm", "y", "proceed"}:
                     reply_text = "🔒 Operator PIN required. Reply with your PIN to approve this action, or 'deny' to cancel."
-                    if token and chat_id:
-                        await send_telegram_reply(token, chat_id, reply_text)
-                    if update_id is not None:
-                        complete_update(update_id)
+                    await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
                     return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
                 else:
                     reply_text = f"🔒 Incorrect PIN or invalid response for pending approval '{pending['tool_name']}'. Reply with your operator PIN to approve, or 'deny' to cancel."
-                    if token and chat_id:
-                        await send_telegram_reply(token, chat_id, reply_text)
-                    if update_id is not None:
-                        complete_update(update_id)
+                    await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
                     return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
             else:
                 if clean in {"/approve", "approve", "yes", "confirm", "y", "ok", "proceed"}:
@@ -279,10 +326,7 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
             if approved:
                 res = await resume_approval(pending["id"], "approved", owner_id=actor.owner_id, conversation_key=key)
                 reply_text = res.get("reply", "Action approved and executed.")
-                if token and chat_id:
-                    await send_telegram_reply(token, chat_id, reply_text)
-                if update_id is not None:
-                    complete_update(update_id)
+                await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
                 audit_service.record_event(
                     run_id=run_id,
                     owner_id=actor.owner_id,
@@ -316,11 +360,7 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
             auth_hint = "your Operator PIN" if pin else "'yes' or '/approve'"
             reply_text = f"⚠️ Approval Required: {tool_name} requires confirmation.\n\nReply with {auth_hint} to proceed, or 'deny' to cancel."
 
-        if token and chat_id:
-            await send_telegram_reply(token, chat_id, reply_text)
-
-        if update_id is not None:
-            complete_update(update_id)
+        await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
 
         audit_service.record_event(
             run_id=run_id,
@@ -361,9 +401,10 @@ async def telegram_webhook(
 ) -> dict[str, Any]:
     """Receive webhook updates from Telegram Bot API."""
     expected_secret = getattr(settings, "telegram_webhook_secret", "").strip()
-    if expected_secret:
-        if not x_telegram_bot_api_secret_token or x_telegram_bot_api_secret_token != expected_secret:
-            raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret token")
+    if not expected_secret:
+        raise HTTPException(status_code=503, detail="Telegram webhook secret is not configured")
+    if not x_telegram_bot_api_secret_token or not hmac.compare_digest(x_telegram_bot_api_secret_token, expected_secret):
+        raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret token")
 
     payload = await request.json()
     result = await process_telegram_update(payload)
@@ -394,13 +435,20 @@ class TelegramLongPoller:
                         for update in updates:
                             update_id = update.get("update_id", 0)
                             if update_id:
-                                # Ensure durable receipt before advancing offset
+                                # Record receipt now, but acknowledge only after processing and delivery.
                                 run_id = f"telegram_update_{update_id}"
                                 payload_hash = hashlib.sha256(json.dumps(update, sort_keys=True, default=str).encode()).hexdigest()
                                 record_update_receipt(update_id, run_id, payload_hash)
+                            try:
+                                await process_telegram_update(update, bot_token=self.bot_token)
+                            except Exception:
+                                if not update_id or update_attempt_count(update_id) < settings.telegram_max_update_attempts:
+                                    raise
+                                # Keep the failed receipt for manual recovery, but do not block later updates.
+                                print(f"[TelegramLongPoller] Update {update_id} needs manual recovery after repeated failures.")
+                            if update_id:
                                 self.offset = max(self.offset, update_id + 1)
                                 persist_offset(self.offset)
-                            await process_telegram_update(update, bot_token=self.bot_token)
                     elif resp.status_code == 409:
                         print("[TelegramLongPoller] Conflict: another bot instance or webhook is active. Waiting 10s...")
                         await asyncio.sleep(10)

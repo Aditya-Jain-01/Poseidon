@@ -110,7 +110,7 @@ Open `http://localhost:5173`. Vite proxies API requests to the backend on port `
 
 ### Optional: Telegram
 
-Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `TELEGRAM_POLLING_ENABLED=true` in `.env`, then restart the backend. Allowed user IDs are comma-separated; an empty allowlist rejects all senders. A webhook adapter is also available, with an optional `TELEGRAM_WEBHOOK_SECRET` check.
+Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `TELEGRAM_POLLING_ENABLED=true` in `.env`, then restart the backend. Allowed user IDs are comma-separated; an empty allowlist rejects all senders. To use the webhook adapter, configure `TELEGRAM_WEBHOOK_SECRET`; requests are rejected while it is unset.
 
 ## Configuration
 
@@ -121,7 +121,8 @@ Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `TELEGRAM_POLLING_ENA
 | `POSEIDON_DB_PATH` | SQLite database location |
 | `POSEIDON_CHECKPOINT_DB_PATH` | LangGraph checkpoint database; defaults beside `POSEIDON_DB_PATH` |
 | `AGENTS_DIR`, `LLM_CONFIG_PATH` | Agent definitions and persisted model overrides |
-| `POSEIDON_CONSOLIDATION_THRESHOLD` | Threshold for automatic memory consolidation; defaults to `30` |
+| `POSEIDON_CONSOLIDATION_THRESHOLD` | Episodic-event threshold for automatic memory consolidation; defaults to `30` |
+| `POSEIDON_RECENT_TURNS` | Recent completed turns included in model context; defaults to `12` |
 | `POSEIDON_EMBEDDING_MODEL`, `POSEIDON_EMBEDDING_DIM` | Embedding model and matching vector dimension |
 | `POSEIDON_API_TOKEN` | Bearer token required for remote operator requests |
 | `POSEIDON_CORS_ORIGINS` | Explicit allowed origins, supplied as a JSON array |
@@ -177,4 +178,4 @@ python backend\scripts\run_gate.py
 
 Poseidon is designed for a personal, local deployment. Remote operator requests require a bearer token, and non-loopback configuration requires explicit CORS origins. These controls do not constitute a full multi-user account system.
 
-Tool handlers run in process with validation and timeouts. Pattern-based redaction and prompt-risk checks provide additional safeguards, but do not guarantee detection of every secret or malicious instruction. External MCP server discovery and lifecycle management remain incomplete. Telegram updates are durably deduplicated, while failed updates require manual recovery rather than automatic retry.
+Tool handlers run in process with validation and timeouts. Pattern-based redaction and prompt-risk checks provide additional safeguards, but do not guarantee detection of every secret or malicious instruction. External MCP server discovery and lifecycle management remain incomplete. Telegram polling retries failed updates up to `TELEGRAM_MAX_UPDATE_ATTEMPTS` times, then leaves the failed receipt for manual recovery and continues with later updates. Delivery can be repeated if the process stops after Telegram accepts a reply but before completion is recorded.
