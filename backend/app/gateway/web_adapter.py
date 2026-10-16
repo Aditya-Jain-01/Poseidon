@@ -93,7 +93,7 @@ async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends
     try:
         from app.orchestration.router import route_request, UnknownAgentError
         target_agent = route_request(req.text, explicit_agent_id=req.agent_id)
-        result = await (run_agent(event, run_id, agent_id=target_agent) if req.agent_id else run_agent(event, run_id))
+        result = await run_agent(event, run_id, agent_id=target_agent)
     except UnknownAgentError as e:
         audit_service.record_event(
             run_id=run_id,

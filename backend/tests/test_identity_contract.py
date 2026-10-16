@@ -8,7 +8,7 @@ def test_chat_ignores_forged_identity_and_channel(monkeypatch):
     from app.main import app
     import app.gateway.web_adapter as adapter
     captured = []
-    async def fake_run(event, run_id):
+    async def fake_run(event, run_id, agent_id):
         captured.append(event)
         return {'reply': 'ok', 'run_id': run_id, 'thread_id': event.channel_thread_id,
                 'conversation_key': event.conversation_key.model_dump()}
@@ -19,6 +19,23 @@ def test_chat_ignores_forged_identity_and_channel(monkeypatch):
     assert captured[0].actor.owner_id == 'local_owner'
     assert captured[0].channel == 'web'
     assert captured[0].channel_thread_id == 'session-a'
+
+
+def test_chat_uses_text_agent_selection(monkeypatch):
+    from app.main import app
+    import app.gateway.web_adapter as adapter
+
+    selected = []
+    async def fake_run(event, run_id, agent_id):
+        selected.append(agent_id)
+        return {'reply': 'ok', 'run_id': run_id, 'thread_id': event.channel_thread_id,
+                'conversation_key': event.conversation_key.model_dump()}
+
+    monkeypatch.setattr(adapter, 'run_agent', fake_run)
+    response = TestClient(app, client=('127.0.0.1', 50000)).post('/chat', json={'text': '@octavious hello'})
+
+    assert response.status_code == 200
+    assert selected == ['octavious']
 
 
 def test_memory_query_identity_has_no_authority():

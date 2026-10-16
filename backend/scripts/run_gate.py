@@ -146,7 +146,7 @@ def test_forged_identity_ignored(monkeypatch):
     from app.main import app
     import app.gateway.web_adapter as adapter
     captured = []
-    async def fake_run(event, run_id):
+    async def fake_run(event, run_id, agent_id):
         captured.append(event)
         return {"reply": "ok", "run_id": run_id,
                 "thread_id": event.channel_thread_id,
@@ -426,7 +426,7 @@ def test_memory_update_forget_re_embed(tmp_path):
 def test_agent_selection_and_permission_enforcement(monkeypatch):
     from app.main import app
     import app.gateway.web_adapter as adapter
-    async def fake_run(event, run_id):
+    async def fake_run(event, run_id, agent_id):
         return {"reply": "ok", "run_id": run_id,
                 "thread_id": event.channel_thread_id,
                 "conversation_key": event.conversation_key.model_dump()}
