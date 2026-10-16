@@ -1,6 +1,7 @@
 """Unit tests for the memory consolidation pipeline."""
 
 import gc
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -123,6 +124,50 @@ class TestConsolidation(unittest.IsolatedAsyncioTestCase):
 
         # Verify episodic records are marked consolidated
         self.assertEqual(self.episodic.count_unconsolidated("user1"), 0)
+
+    @patch("app.agents.summarizer_agent._get_client")
+    async def test_failed_summary_keeps_events_retryable(self, mock_client):
+        self.episodic.log_event("user1", "user", "I live in Seattle.")
+        mock_client.return_value.chat.completions.create = AsyncMock(side_effect=RuntimeError("model unavailable"))
+
+        with self.assertRaises(RuntimeError):
+            await check_and_trigger_consolidation("user1", force=True)
+
+        self.assertEqual(self.episodic.count_unconsolidated("user1"), 1)
+
+    @patch("app.agents.summarizer_agent.summarize_and_consolidate", new_callable=AsyncMock)
+    async def test_threshold_above_fifty_still_triggers_automatic_consolidation(self, mock_summarize):
+        from app.memory.memory_engine import MemoryEngine
+
+        engine = MemoryEngine()
+        engine.episodic_store = self.episodic
+        for index in range(51):
+            self.episodic.log_event("user1", "user", f"Fact {index}")
+        mock_summarize.return_value = {"events_processed": 51, "facts_added": 0, "skills_added": 0}
+
+        with patch("app.memory.consolidation.settings.poseidon_consolidation_threshold", 51):
+            engine._maybe_trigger_consolidation("user1")
+            await asyncio.sleep(0)
+
+        mock_summarize.assert_awaited_once()
+
+    @patch("app.agents.summarizer_agent.summarize_events", new_callable=AsyncMock)
+    async def test_concurrent_triggers_consolidate_each_event_once(self, mock_summarize):
+        self.episodic.log_event("user1", "user", "I live in Seattle.")
+
+        async def summarize(_events):
+            await asyncio.sleep(0)
+            return {"facts": [], "skills": []}
+
+        mock_summarize.side_effect = summarize
+        with patch("app.memory.consolidation.settings.poseidon_consolidation_threshold", 1):
+            results = await asyncio.gather(
+                check_and_trigger_consolidation("user1"),
+                check_and_trigger_consolidation("user1"),
+            )
+
+        assert [result["consolidated"] for result in results] == [True, False]
+        mock_summarize.assert_awaited_once()
 
 
 if __name__ == "__main__":

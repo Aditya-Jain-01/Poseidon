@@ -55,7 +55,9 @@ class SessionStore:
         return list(self._sessions.get(self.key(key), []))
 
     def append(self, key, human_msg, ai_msg):
-        self._sessions.setdefault(self.key(key), []).extend([HumanMessage(content=human_msg), AIMessage(content=ai_msg)])
+        messages = self._sessions.setdefault(self.key(key), [])
+        messages.extend([HumanMessage(content=human_msg), AIMessage(content=ai_msg)])
+        del messages[:-2 * settings.poseidon_recent_turns]
 
     def clear(self, key=None):
         if key is None:
@@ -191,13 +193,14 @@ class MemoryEngine:
             full_system_prompt = persona
 
         key = conversation_key or self.session_store.key(user_id)
-        history = self.session_store.get_history(key)
+        history = self.session_store.get_history(key)[-2 * settings.poseidon_recent_turns:]
         if conversation_key is not None:
             # Durable completed conversations survive application reconstruction.
             self.episodic_store.init_db()
             with connection(self.episodic_store.db_path) as conn:
-                turns = conn.execute('SELECT user_text,reply FROM completed_turns WHERE conversation_key_json=? ORDER BY created_at, rowid', (canonical_json(key.model_dump()),)).fetchall()
-            history = [message for row in turns for message in (HumanMessage(content=row['user_text']), AIMessage(content=row['reply']))]
+                turns = conn.execute('SELECT user_text,reply FROM completed_turns WHERE conversation_key_json=? ORDER BY rowid DESC LIMIT ?',
+                                     (canonical_json(key.model_dump()), settings.poseidon_recent_turns)).fetchall()
+            history = [message for row in reversed(turns) for message in (HumanMessage(content=row['user_text']), AIMessage(content=row['reply']))]
         messages = [
             SystemMessage(content=full_system_prompt),
             *history,
@@ -235,21 +238,19 @@ class MemoryEngine:
         self._maybe_trigger_consolidation(user_id)
 
     def _maybe_trigger_consolidation(self, user_id: str) -> None:
-        """Fire-and-forget background task: once unconsolidated turn count
+        """Fire-and-forget background task: once unconsolidated event count
         hits the threshold, the SummarizerAgent distills episodic events
         into durable semantic facts and procedural skills.
         """
         try:
-            from app.memory.consolidation import get_unconsolidated_events
-            unconsolidated = get_unconsolidated_events(user_id=user_id, limit=50)
+            from app.memory.consolidation import check_and_trigger_consolidation
             threshold = getattr(settings, "poseidon_consolidation_threshold", 30)
-            if len(unconsolidated) >= threshold:
-                from app.agents.summarizer_agent import summarize_and_consolidate
+            if self.episodic_store.count_unconsolidated(user_id=user_id) >= threshold:
                 try:
                     loop = asyncio.get_running_loop()
                     async def _safe_consolidate():
                         try:
-                            await summarize_and_consolidate(user_id=user_id, events=unconsolidated)
+                            await check_and_trigger_consolidation(user_id=user_id, limit=max(50, threshold))
                         except Exception as err:
                             print(f"[MemoryEngine] Background consolidation task error: {err}")
                     loop.create_task(_safe_consolidate())

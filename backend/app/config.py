@@ -36,11 +36,13 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = Field(default="", description="Telegram Bot API Token")
     telegram_allowed_user_ids: str = Field(default="", description="Comma-separated allowed Telegram user IDs")
-    telegram_webhook_secret: str = Field(default="", description="Optional secret token for webhook verification")
+    telegram_webhook_secret: str = Field(default="", description="Required secret token for webhook verification")
     telegram_polling_enabled: bool = Field(default=False, description="Enable local long-polling runner if token present")
+    telegram_max_update_attempts: int = Field(5, ge=1, description="Polling attempts before a failed update needs manual recovery")
 
-    # Consolidation triggers the SummarizerAgent after this many new turns
+    # Consolidation triggers the SummarizerAgent after this many new episodic events.
     poseidon_consolidation_threshold: int = Field(30)
+    poseidon_recent_turns: int = Field(12, ge=1, description="Completed turns retained in model conversation context")
     poseidon_db_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "state.db")
     poseidon_checkpoint_db_path: Path | None = None
     agents_dir: Path = Field(default=_PROJECT_ROOT / "memory-store" / "agents")

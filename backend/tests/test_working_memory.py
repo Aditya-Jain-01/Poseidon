@@ -4,8 +4,11 @@ import gc
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
+from app.config import settings
+from app.models import ConversationKey
 from app.memory.episodic_store import EpisodicStore
 from app.memory.working_memory import assemble, session_store
 from app.memory.memory_engine import memory_engine
@@ -79,6 +82,18 @@ class TestWorkingMemory(unittest.TestCase):
         self.assertIn("=== PERSISTENT MEMORY CONTEXT ===", system_content)
         self.assertIn("Recalled Past Conversations & Events (Episodic Memory)", system_content)
         self.assertIn("I am allergic to peanuts.", system_content)
+
+    def test_durable_conversation_keeps_only_recent_turns(self):
+        key = ConversationKey(owner_id="user_abc", channel="web", channel_account_id="local_browser", thread_id="long-thread")
+        self.test_store.retrieve = lambda user_id, query: []
+        with patch.object(settings, "poseidon_recent_turns", 2), patch.object(memory_engine, "_maybe_trigger_consolidation"):
+            for index in range(4):
+                memory_engine.record_turn("user_abc", f"question {index}", f"answer {index}", f"run-{index}", conversation_key=key)
+            messages = memory_engine.hydrate_context(user_id="user_abc", user_text="next question", conversation_key=key).messages
+
+        assert [message.content for message in messages[1:]] == [
+            "question 2", "answer 2", "question 3", "answer 3", "next question"
+        ]
 
 
 if __name__ == "__main__":

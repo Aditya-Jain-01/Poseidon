@@ -77,7 +77,7 @@ def _extract_json(text: str) -> dict[str, Any]:
     """Robustly extract and parse JSON from the model's response."""
     text = text.strip()
     if not text:
-        return {"facts": [], "skills": []}
+        raise ValueError("Summarizer returned an empty response")
 
     try:
         return json.loads(text)
@@ -99,7 +99,7 @@ def _extract_json(text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    return {"facts": [], "skills": []}
+    raise ValueError("Summarizer returned invalid JSON")
 
 
 async def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -119,20 +119,19 @@ async def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     client = _get_client()
     model = _get_model()
 
-    try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SUMMARIZER_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"} if "openai" in str(getattr(client, "base_url", "")).lower() else None,
-        )
-        content = response.choices[0].message.content or ""
-        return _extract_json(content)
-    except Exception as e:
-        print(f"[SummarizerAgent] Error calling LLM: {e}")
-        return {"facts": [], "skills": []}
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": SUMMARIZER_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"} if "openai" in str(getattr(client, "base_url", "")).lower() else None,
+    )
+    content = response.choices[0].message.content or ""
+    summary = _extract_json(content)
+    if not isinstance(summary, dict) or not isinstance(summary.get("facts"), list) or not isinstance(summary.get("skills"), list):
+        raise ValueError("Summarizer returned an invalid summary shape")
+    return summary
 
 
 async def summarize_and_consolidate(

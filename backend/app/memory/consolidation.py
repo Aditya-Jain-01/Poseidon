@@ -1,17 +1,20 @@
-"""Consolidation Manager — triggers memory distillation after N new chats.
+"""Consolidation Manager — triggers memory distillation after N new episodic events.
 
-- Enforces the "only after N new chats" threshold rule (spec source of truth).
+- Enforces the configured episodic-event threshold.
 - Prevents expensive LLM summarization on every single turn.
 - Pulls unconsolidated episodic entries and hands them to the Summarizer Agent.
 - Provides programmatic and on-demand consolidation triggers.
 """
 
 from typing import Any
-import sqlite3
+import asyncio
 
 from app.config import settings
 from app.memory.episodic_store import episodic_store
 from app.agents import summarizer_agent
+
+
+_user_locks: dict[str, asyncio.Lock] = {}
 
 
 def get_unconsolidated_events(user_id: str, limit: int | None = None) -> list[dict[str, Any]]:
@@ -43,7 +46,7 @@ def get_consolidation_status(user_id: str) -> dict[str, Any]:
         "threshold": threshold,
         "ready": unconsolidated_count >= threshold,
         "progress_percent": min(100, int((unconsolidated_count / max(1, threshold)) * 100)),
-        "message": f"{unconsolidated_count}/{threshold} chats until next automatic consolidation",
+        "message": f"{unconsolidated_count}/{threshold} events until next automatic consolidation",
     }
 
 
@@ -52,6 +55,12 @@ async def check_and_trigger_consolidation(
     force: bool = False,
     limit: int | None = None,
 ) -> dict[str, Any]:
+    """Serialize consolidation for one owner and recheck eligibility inside the lock."""
+    async with _user_locks.setdefault(user_id, asyncio.Lock()):
+        return await _run_consolidation(user_id, force=force, limit=limit)
+
+
+async def _run_consolidation(user_id: str, force: bool, limit: int | None) -> dict[str, Any]:
     """Check if consolidation threshold is met, or run immediately if forced.
 
     If threshold is reached or force=True:
@@ -69,7 +78,7 @@ async def check_and_trigger_consolidation(
             "reason": "threshold_not_reached",
             "unconsolidated_count": unconsolidated_count,
             "threshold": threshold,
-            "message": f"{unconsolidated_count}/{threshold} chats until next automatic consolidation",
+            "message": f"{unconsolidated_count}/{threshold} events until next automatic consolidation",
         }
 
     events = get_unconsolidated_events(user_id=user_id, limit=limit)
