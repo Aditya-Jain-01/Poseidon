@@ -260,13 +260,15 @@ export function TrajectoryView({ messages = [] }) {
   // Filter events based on search
   const filteredEvents = useMemo(() => {
     if (!searchQuery.trim()) return events;
-    const q = searchQuery.toLowerCase();
-    return events.filter((e) => 
-      e.label.toLowerCase().includes(q) || 
-      e.type.toLowerCase().includes(q) ||
-      e.title.toLowerCase().includes(q) ||
-      (e.payload && e.payload.toLowerCase().includes(q))
-    );
+      const terms = searchQuery.toLowerCase().trim().split(/\s+/);
+      return events.filter((e) => {
+        const searchableText = [e.label, e.type, e.title, e.payload, e.result]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        // Every keyword must match this event, in any order or searchable field.
+        return terms.every((term) => searchableText.includes(term));
+      });
   }, [events, searchQuery]);
 
   // Calculate real metrics

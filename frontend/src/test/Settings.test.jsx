@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Settings from '../pages/Settings/Settings';
 import { HealthContext } from '../context/HealthContext';
@@ -58,6 +58,24 @@ describe('Settings Component', () => {
     expect(screen.getAllByText('nvidia/nemotron-3-ultra').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Fallback python-cosine')).toBeInTheDocument();
     expect(screen.getByText(/Python 3.12.10 · WAL=on · FTS5=on/i)).toBeInTheDocument();
+  });
+
+  it('uses the styled scroll container and switches between all sections', async () => {
+    const { container } = renderSettings();
+    expect(container.querySelector('.settings-page-root')).toBeInTheDocument();
+    expect(screen.getByRole('tablist')).toHaveClass('settings-tabs-row');
+    expect(screen.getByRole('region', { name: 'Runtime configuration summary' })).toHaveClass('runtime-summary-grid');
+    const memoryTab = screen.getByRole('tab', { name: 'Memory Studio' });
+    expect(memoryTab).toHaveClass('settings-tab-btn');
+    fireEvent.click(memoryTab);
+    expect(memoryTab).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText('User likes tea')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search semantic facts' })).toHaveClass('search-input');
+    expect(screen.getByRole('button', { name: 'Consolidate Now' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Harness & Security' }));
+    expect(screen.getByRole('heading', { name: 'Tool Execution Permissions' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Models & Inference' }));
+    expect(screen.getByRole('button', { name: 'Test connection' })).toBeEnabled();
   });
 
   it('displays native sqlite-vec when active', () => {

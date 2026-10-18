@@ -148,19 +148,19 @@ export function Settings() {
     : 'python-cosine (Fallback cosine similarity in memory)';
 
   return (
-    <div className="settings-page animate-fade-in">
-      <div className="settings-header">
+    <div className="settings-page-root animate-fade-in">
+      <div className="settings-page-header">
         <h1 className="settings-title">Settings &amp; Preferences</h1>
         <p className="settings-subtitle">Manage model routing, local memory tiers, and security boundaries.</p>
       </div>
 
       {/* Tabs */}
-      <div className="settings-tabs" role="tablist">
+      <div className="settings-tabs-row" role="tablist" aria-label="Settings sections">
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'models'}
-          className={`tab-btn ${activeTab === 'models' ? 'active' : ''}`}
+          className={`settings-tab-btn ${activeTab === 'models' ? 'active' : ''}`}
           onClick={() => setActiveTab('models')}
         >
           <Cpu size={16} />
@@ -170,7 +170,7 @@ export function Settings() {
           type="button"
           role="tab"
           aria-selected={activeTab === 'memory'}
-          className={`tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
+          className={`settings-tab-btn ${activeTab === 'memory' ? 'active' : ''}`}
           onClick={() => setActiveTab('memory')}
         >
           <Brain size={16} />
@@ -180,7 +180,7 @@ export function Settings() {
           type="button"
           role="tab"
           aria-selected={activeTab === 'security'}
-          className={`tab-btn ${activeTab === 'security' ? 'active' : ''}`}
+          className={`settings-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
           onClick={() => setActiveTab('security')}
         >
           <Shield size={16} />
@@ -191,7 +191,7 @@ export function Settings() {
       {/* Tab 1: Models & Inference */}
       {activeTab === 'models' && (
         <div className="settings-tab-content animate-fade-in" role="tabpanel">
-          <section className="runtime-summary" aria-label="Runtime configuration summary">
+          <section className="runtime-summary-grid" aria-label="Runtime configuration summary">
             <article className="runtime-summary-item">
               <span className="runtime-summary-icon"><Cpu size={16} /></span>
               <div>
@@ -435,7 +435,8 @@ export function Settings() {
                     setFactQuery(e.target.value);
                     loadMemoryData(e.target.value);
                   }}
-                  className="facts-search-input"
+                  className="search-input"
+                  aria-label="Search semantic facts"
                 />
               </div>
             </div>

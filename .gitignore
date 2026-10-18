@@ -38,6 +38,8 @@ __pycache__/
 .agents
 AGENTS.md
 CONTEXT.md
+README_STUDY.md
+/interview-prep/
 pytest.ini
 skills-lock.json
 docs

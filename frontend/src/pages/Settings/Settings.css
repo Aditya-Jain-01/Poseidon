@@ -3,6 +3,9 @@
 .settings-page-root {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
   height: 100%;
   padding: 24px 32px 3.5rem 32px;
   overflow-y: auto;
@@ -10,6 +13,11 @@
   background-color: var(--color-canvas);
   gap: 20px;
   font-family: var(--font-sans);
+}
+
+/* Keep sections at their natural height inside the bounded scroll container. */
+.settings-page-root > * {
+  flex-shrink: 0;
 }
 
 .settings-page-header {
@@ -37,6 +45,7 @@
 /* ── Tabs Bar ── */
 .settings-tabs-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   border-bottom: 1px solid var(--color-border-subtle);
   padding-bottom: 8px;
@@ -839,6 +848,7 @@
   }
 
   .settings-tabs-row {
+    flex-wrap: nowrap;
     overflow-x: auto;
   }
 
