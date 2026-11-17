@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 def test_models_roundtrip_multiple_calls_and_ids():
     from app.models import Message, ToolCall
-    from app.orchestration.langchain_bridge import from_langchain, to_langchain
+    from app.runtime.langchain_bridge import from_langchain, to_langchain
     messages = [Message(role='assistant', id='assistant-id', tool_calls=[ToolCall(id='c1', name='calendar_read'), ToolCall(id='c2', name='crm_read')]),
                 Message(role='tool', content='{}', tool_call_id='c2', name='crm_read', id='result-id')]
     for message in messages:
@@ -23,8 +23,8 @@ def test_trusted_fields_and_empty_identifiers_rejected():
 
 
 def test_migrations_repeat_and_reject_newer_schema(tmp_path):
-    from app.db.migrations import apply_migrations
-    from app.db.connection import connection
+    from app.storage.migrations import apply_migrations
+    from app.storage.connection import connection
     db = tmp_path / 'migration.db'
     schemas = []
     for _ in range(3):

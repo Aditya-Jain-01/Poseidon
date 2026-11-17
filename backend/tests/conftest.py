@@ -45,14 +45,14 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.fixture(autouse=True)
 def isolated_stores(tmp_path, monkeypatch):
     from app.config import settings
-    from app.db.migrations import apply_migrations
+    from app.storage.migrations import apply_migrations
     from app.memory.embeddings import embedding_service
     from app.memory.memory_engine import memory_engine, session_store
     from app.memory.semantic_store import semantic_store
     from app.memory.episodic_store import episodic_store
     from app.memory.procedural_store import procedural_store
-    from app.soul import soul_store
-    from app.llm_providers import llm_provider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
+    from app.agents.profiles import soul_store
+    from app.agents.providers import llm_provider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
     db = tmp_path / 'state.db'
     agents = tmp_path / 'agents'
     agents.mkdir()
@@ -78,8 +78,8 @@ def isolated_stores(tmp_path, monkeypatch):
     session_store.clear()
     apply_migrations(db)
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, HarnessServices, set_runtime
-    from app.orchestration.approval_store import ApprovalStore
+    from app.runtime.graph import HarnessRuntime, HarnessServices, set_runtime
+    from app.runtime.approval_store import ApprovalStore
     set_runtime(HarnessRuntime(InMemorySaver(), HarnessServices(approvals=ApprovalStore(db))))
     yield
     set_runtime(None)

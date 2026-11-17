@@ -2,7 +2,7 @@
 import pytest
 
 from app.models import ActorContext, ConversationKey, ToolCall, ToolExecutionContext
-from app.orchestration.router import UnknownAgentError, route_request
+from app.agents.router import UnknownAgentError, route_request
 from app.tools.policy import ToolPolicyService
 
 

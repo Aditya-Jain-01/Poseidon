@@ -10,19 +10,19 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.llm_providers import llm_provider
-from app.gateway.web_adapter import router as web_router
-from app.gateway.telegram_adapter import router as telegram_router, poller as telegram_poller
-from app.gateway.memory_adapter import router as memory_router
-from app.gateway.agents_adapter import router as agents_router
-from app.gateway.trajectory_adapter import router as trajectory_router
-from app.db.migrations import apply_migrations
-from app.db.checkpoint_migration import copy_legacy_checkpoints
-from app.db.connection import connection
+from app.agents.providers import llm_provider
+from app.api.chat import router as web_router
+from app.channels.telegram import router as telegram_router, poller as telegram_poller
+from app.api.memory import router as memory_router
+from app.api.agents import router as agents_router
+from app.api.runs import router as trajectory_router
+from app.storage.migrations import apply_migrations
+from app.storage.checkpoint_migration import copy_legacy_checkpoints
+from app.storage.connection import connection
 from app.startup_checks import check_runtime
 from app.security.identity import resolve_actor, validate_network_config
-from app.orchestration.graph import HarnessRuntime, HarnessServices, set_runtime
-from app.orchestration.approval_store import ApprovalStore
+from app.runtime.runner import HarnessRuntime, HarnessServices, set_runtime
+from app.runtime.approval_store import ApprovalStore
 from app.security.secrets import redact
 
 

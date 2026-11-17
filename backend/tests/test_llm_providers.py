@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from app.llm_providers import LLMProvider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
+from app.agents.providers import LLMProvider, DEFAULT_PROVIDERS, DEFAULT_AGENT_OVERRIDES
 from app.agents.qa_agent import call, AgentResult, _to_openai_messages
 
 

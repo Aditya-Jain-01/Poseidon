@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.config import settings
-from app.gateway.telegram_adapter import process_telegram_update, is_user_allowed
+from app.channels.telegram import process_telegram_update, is_user_allowed
 
 
 client = TestClient(app, client=('127.0.0.1', 50000))
@@ -50,12 +50,12 @@ async def test_telegram_process_update_authorized():
     }
 
     with patch.object(settings, "telegram_allowed_user_ids", "12345"):
-        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("app.channels.telegram.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {
                 "reply": "It is afternoon.",
                 "run_id": "run_tg_001",
             }
-            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock) as mock_reply:
+            with patch("app.channels.telegram.send_telegram_reply", new_callable=AsyncMock) as mock_reply:
                 mock_reply.return_value = True
 
                 result = await process_telegram_update(fake_update, bot_token="fake_token")
@@ -78,7 +78,7 @@ def test_telegram_webhook_secret_header_verification():
         assert resp.status_code == 403
 
         # With valid secret header -> accepted
-        with patch("app.gateway.telegram_adapter.process_telegram_update", new_callable=AsyncMock) as mock_proc:
+        with patch("app.channels.telegram.process_telegram_update", new_callable=AsyncMock) as mock_proc:
             mock_proc.return_value = {"status": "processed"}
             resp_valid = client.post(
                 "/gateway/telegram/webhook",
@@ -99,14 +99,14 @@ def test_telegram_webhook_rejects_requests_when_secret_is_unset():
 
 @pytest.mark.asyncio
 async def test_failed_telegram_reply_keeps_update_retryable():
-    from app.db.connection import connection
+    from app.storage.connection import connection
 
     update = {"update_id": 987654, "message": {"message_id": 1, "from": {"id": 12345},
                                               "chat": {"id": 12345}, "text": "hello"}}
     with patch.object(settings, "telegram_allowed_user_ids", "12345"):
-        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("app.channels.telegram.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"reply": "hello back"}
-            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock) as mock_reply:
+            with patch("app.channels.telegram.send_telegram_reply", new_callable=AsyncMock) as mock_reply:
                 mock_reply.return_value = False
                 with pytest.raises(RuntimeError, match="delivery failed"):
                     await process_telegram_update(update, bot_token="fake_token")
@@ -122,7 +122,7 @@ async def test_failed_telegram_reply_keeps_update_retryable():
 
 @pytest.mark.asyncio
 async def test_poller_keeps_offset_when_update_processing_fails():
-    from app.gateway.telegram_adapter import TelegramLongPoller
+    from app.channels.telegram import TelegramLongPoller
 
     poller = TelegramLongPoller(bot_token="fake_token")
     poller.offset = 987000
@@ -138,10 +138,10 @@ async def test_poller_keeps_offset_when_update_processing_fails():
     async def stop_after_failure(_seconds):
         poller._running = False
 
-    with patch("app.gateway.telegram_adapter.httpx.AsyncClient", return_value=transport_context), \
-         patch("app.gateway.telegram_adapter.process_telegram_update", new_callable=AsyncMock) as process, \
-         patch("app.gateway.telegram_adapter.persist_offset") as persist, \
-         patch("app.gateway.telegram_adapter.asyncio.sleep", side_effect=stop_after_failure):
+    with patch("app.channels.telegram.httpx.AsyncClient", return_value=transport_context), \
+         patch("app.channels.telegram.process_telegram_update", new_callable=AsyncMock) as process, \
+         patch("app.channels.telegram.persist_offset") as persist, \
+         patch("app.channels.telegram.asyncio.sleep", side_effect=stop_after_failure):
         process.side_effect = RuntimeError("delivery failed")
         await poller._poll_loop()
 
@@ -152,7 +152,7 @@ async def test_poller_keeps_offset_when_update_processing_fails():
 
 @pytest.mark.asyncio
 async def test_poller_moves_past_update_after_retry_limit():
-    from app.gateway.telegram_adapter import TelegramLongPoller
+    from app.channels.telegram import TelegramLongPoller
 
     poller = TelegramLongPoller(bot_token="fake_token")
     poller.offset = 987000
@@ -167,10 +167,10 @@ async def test_poller_moves_past_update_after_retry_limit():
     def persist_and_stop(_offset):
         poller._running = False
 
-    with patch("app.gateway.telegram_adapter.httpx.AsyncClient", return_value=transport_context), \
-         patch("app.gateway.telegram_adapter.process_telegram_update", new_callable=AsyncMock) as process, \
-         patch("app.gateway.telegram_adapter.update_attempt_count", return_value=5), \
-         patch("app.gateway.telegram_adapter.persist_offset", side_effect=persist_and_stop) as persist:
+    with patch("app.channels.telegram.httpx.AsyncClient", return_value=transport_context), \
+         patch("app.channels.telegram.process_telegram_update", new_callable=AsyncMock) as process, \
+         patch("app.channels.telegram.update_attempt_count", return_value=5), \
+         patch("app.channels.telegram.persist_offset", side_effect=persist_and_stop) as persist:
         process.side_effect = RuntimeError("delivery failed")
         await poller._poll_loop()
 
@@ -180,7 +180,7 @@ async def test_poller_moves_past_update_after_retry_limit():
 
 @pytest.mark.asyncio
 async def test_poller_keeps_update_pending_when_outbound_limit_is_reached():
-    from app.gateway.telegram_adapter import TelegramLongPoller
+    from app.channels.telegram import TelegramLongPoller
     from app.security.guardrails import GuardrailRateLimitError
 
     poller = TelegramLongPoller(bot_token='fake_token')
@@ -196,10 +196,10 @@ async def test_poller_keeps_update_pending_when_outbound_limit_is_reached():
     async def stop_after_wait(_seconds):
         poller._running = False
 
-    with patch('app.gateway.telegram_adapter.httpx.AsyncClient', return_value=transport_context), \
-         patch('app.gateway.telegram_adapter.process_telegram_update', new_callable=AsyncMock) as process, \
-         patch('app.gateway.telegram_adapter.persist_offset') as persist, \
-         patch('app.gateway.telegram_adapter.asyncio.sleep', side_effect=stop_after_wait):
+    with patch('app.channels.telegram.httpx.AsyncClient', return_value=transport_context), \
+         patch('app.channels.telegram.process_telegram_update', new_callable=AsyncMock) as process, \
+         patch('app.channels.telegram.persist_offset') as persist, \
+         patch('app.channels.telegram.asyncio.sleep', side_effect=stop_after_wait):
         process.side_effect = GuardrailRateLimitError('send limit')
         await poller._poll_loop()
 
@@ -210,7 +210,7 @@ async def test_poller_keeps_update_pending_when_outbound_limit_is_reached():
 @pytest.mark.asyncio
 async def test_telegram_routes_to_poseidon_env_by_default():
     """Verify normal Telegram message routes to Poseidon and resolves to .env provider."""
-    from app.llm_providers import llm_provider
+    from app.agents.providers import llm_provider
 
     fake_update = {
         "update_id": 2001,
@@ -223,9 +223,9 @@ async def test_telegram_routes_to_poseidon_env_by_default():
     }
 
     with patch.object(settings, "telegram_allowed_user_ids", "12345"):
-        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("app.channels.telegram.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"reply": "All tasks on schedule.", "active_agent": "poseidon"}
-            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+            with patch("app.channels.telegram.send_telegram_reply", new_callable=AsyncMock):
                 result = await process_telegram_update(fake_update, bot_token="fake_token")
                 assert result.get("status") == "processed"
                 assert mock_run.called
@@ -245,7 +245,7 @@ async def test_telegram_routes_to_poseidon_env_by_default():
 @pytest.mark.asyncio
 async def test_telegram_explicit_agent_selection_and_local_provider():
     """Verify explicit agent selection routes correctly, and local agent resolves to Ollama."""
-    from app.llm_providers import llm_provider
+    from app.agents.providers import llm_provider
 
     # 1. Test explicit @octavious selection
     update_oct = {
@@ -259,9 +259,9 @@ async def test_telegram_explicit_agent_selection_and_local_provider():
     }
 
     with patch.object(settings, "telegram_allowed_user_ids", "12345"):
-        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("app.channels.telegram.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"reply": "Local system checked.", "active_agent": "octavious"}
-            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+            with patch("app.channels.telegram.send_telegram_reply", new_callable=AsyncMock):
                 result = await process_telegram_update(update_oct, bot_token="fake_token")
                 assert result.get("status") == "processed"
                 _, kwargs = mock_run.call_args
@@ -279,9 +279,9 @@ async def test_telegram_explicit_agent_selection_and_local_provider():
     }
 
     with patch.object(settings, "telegram_allowed_user_ids", "12345"):
-        with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("app.channels.telegram.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"reply": "Diagnostic complete.", "active_agent": "octavious"}
-            with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+            with patch("app.channels.telegram.send_telegram_reply", new_callable=AsyncMock):
                 result = await process_telegram_update(update_cmd, bot_token="fake_token")
                 assert result.get("status") == "processed"
                 _, kwargs = mock_run.call_args

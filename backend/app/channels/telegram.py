@@ -24,9 +24,9 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from app.config import settings
-from app.db.connection import connection
-from app.orchestration.graph import run_agent
-from app.orchestration.state import InboundEvent
+from app.storage.connection import connection
+from app.runtime.runner import run_agent
+from app.runtime.state import InboundEvent
 from app.models import ConversationKey
 from app.security.audit import audit_service
 from app.security.identity import telegram_actor
@@ -303,8 +303,8 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
     )
 
     try:
-        from app.orchestration.approval_store import approval_store
-        from app.orchestration.graph import resume_approval
+        from app.runtime.approval_store import approval_store
+        from app.runtime.runner import resume_approval
 
         pending = approval_store.get_pending_for_user(user_id, key)
         if pending:
@@ -367,7 +367,7 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
             taint_sources=["telegram"] if tainted else [],
         )
 
-        from app.orchestration.router import route_request
+        from app.agents.router import route_request
 
         target_agent = route_request(text)
         result = await run_agent(event, run_id=run_id, agent_id=target_agent)

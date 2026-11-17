@@ -27,8 +27,8 @@ except ImportError:
     np = None
 
 from app.config import settings
-from app.db.connection import connection
-from app.db.migrations import apply_migrations
+from app.storage.connection import connection
+from app.storage.migrations import apply_migrations
 from app.memory.embeddings import embedding_service
 
 

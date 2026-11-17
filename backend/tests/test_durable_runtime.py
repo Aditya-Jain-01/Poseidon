@@ -5,8 +5,8 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.messages import ToolMessage
 from app.models import ConversationKey, ActorContext, InboundEvent
-from app.orchestration.graph import HarnessRuntime, HarnessServices, run_agent, resume_approval
-from app.orchestration.approval_store import ApprovalStore, ExecutionStore
+from app.runtime.graph import HarnessRuntime, HarnessServices, run_agent, resume_approval
+from app.runtime.approval_store import ApprovalStore, ExecutionStore
 from app.security.sandbox import ExecutionTimeoutError
 
 
@@ -76,7 +76,7 @@ async def test_suspicious_note_interrupts_before_executor_or_next_llm(tmp_path):
 
 @pytest.mark.asyncio
 async def test_expiry_owner_and_argument_binding(tmp_path):
-    from app.db.connection import connection
+    from app.storage.connection import connection
     llm = AsyncMock(return_value={'tool_calls': [call(title='Original')]})
     executor = AsyncMock()
     runtime = HarnessRuntime(InMemorySaver(), services(tmp_path / 'binding.db', llm, executor))
@@ -197,7 +197,7 @@ async def test_concurrent_memory_telemetry_is_request_local(tmp_path, monkeypatc
 @pytest.mark.asyncio
 async def test_conversation_history_isolated_and_recording_idempotent(tmp_path, monkeypatch):
     from app.memory.memory_engine import memory_engine
-    from app.db.connection import connection
+    from app.storage.connection import connection
     monkeypatch.setattr(memory_engine.episodic_store, 'retrieve', lambda **kwargs: [])
     llm = AsyncMock(return_value={'content': 'first reply'})
     runtime = HarnessRuntime(InMemorySaver(), services(tmp_path / 'sessions.db', llm))
@@ -245,8 +245,8 @@ def test_hydration_telemetry_cannot_mutate_other_requests(monkeypatch):
 @pytest.mark.asyncio
 async def test_async_sqlite_interrupt_restart_resume_executes_once(tmp_path):
     sqlite = pytest.importorskip('langgraph.checkpoint.sqlite.aio', reason='SQLite checkpoint package is not installed in the supplied venv')
-    from app.db.checkpoint_migration import copy_legacy_checkpoints
-    from app.db.migrations import apply_migrations
+    from app.storage.checkpoint_migration import copy_legacy_checkpoints
+    from app.storage.migrations import apply_migrations
     db = tmp_path / 'restart.db'
     checkpoint_db = tmp_path / 'checkpoints.db'
     # Production applies schema migrations before opening the checkpointer.

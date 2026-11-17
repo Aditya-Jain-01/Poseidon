@@ -7,25 +7,20 @@ from typing import Any, Callable
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
-from app.agents import qa_agent
+from app.agents import DEFAULT_PRIMARY_AGENT, qa_agent
 from app.config import settings
 from app.models import InboundEvent, ConversationKey, ToolCall, ToolExecutionContext, ApprovalDecision, RunResult
 from app.memory.memory_engine import memory_engine
-from app.orchestration.approval_store import ApprovalStore, ExecutionStore
-from app.orchestration.state import AgentState
-from app.orchestration.trajectory import trajectory_store
+from app.runtime.approval_store import ApprovalStore, ExecutionStore
+from app.runtime.state import AgentState
+from app.runtime.trajectory import trajectory_store
 from app.security.risk_analyzer import RiskAnalyzer
 from app.security.note_guard import NoteGuard
 from app.security.secrets import redact
 from app.security.sandbox import ExecutionTimeoutError
 from app.security.guardrails import GuardrailStore, HarnessPausedError
 from app.security.taint import is_channel_untrusted
-from app.tools.registry import get_tool, get_tools_for_agent
-from app.tools.policy import ToolPolicyService
-from app.tools.execution import ToolExecutionService
-
-DEFAULT_PRIMARY_AGENT = 'poseidon'
-
+from app.tools.access import ToolAccess
 
 @dataclass
 class HarnessServices:
@@ -36,9 +31,13 @@ class HarnessServices:
     tool_executor: Callable | None = None
     tool_schemas: Callable | None = None
     tool_tier: Callable | None = None
-    tool_policy: ToolPolicyService = field(default_factory=ToolPolicyService)
-    tool_execution_service: ToolExecutionService = field(default_factory=ToolExecutionService)
+    tools: ToolAccess = field(default_factory=ToolAccess)
     guardrails: GuardrailStore | None = None
+
+    @property
+    def tool_policy(self):
+        """Compatibility access for existing policy-version tests and callers."""
+        return self.tools._policy
 
     def __post_init__(self):
         if self.executions is None:
@@ -48,12 +47,12 @@ class HarnessServices:
 
 
 def _allowed(services, agent_id, name):
-    schemas = (services.tool_schemas or get_tools_for_agent)(agent_id)
+    schemas = (services.tool_schemas or services.tools.schemas_for_agent)(agent_id)
     return name in {s['function']['name'] for s in schemas}
 
 
 def _allowed_names(services, agent_id):
-    return [s['function']['name'] for s in (services.tool_schemas or get_tools_for_agent)(agent_id)]
+    return [s['function']['name'] for s in (services.tool_schemas or services.tools.schemas_for_agent)(agent_id)]
 
 
 def _tool_message(call, result):
@@ -79,7 +78,7 @@ def build_graph(checkpointer, services):
     async def agent_node(state):
         if state['iteration_count'] >= settings.poseidon_max_iterations:
             return {'messages': [AIMessage(content='I stopped because this request exceeded the configured execution limit.')], 'pending_tool_calls': [], 'current_tool_call': None}
-        result = await (services.llm_call or qa_agent.call)(state['active_agent'], state['messages'], tools=(services.tool_schemas or get_tools_for_agent)(state['active_agent']))
+        result = await (services.llm_call or qa_agent.call)(state['active_agent'], state['messages'], tools=(services.tool_schemas or services.tools.schemas_for_agent)(state['active_agent']))
         calls = []
         for call in result.get('tool_calls') or []:
             calls.append(ToolCall.model_validate(call).model_dump())
@@ -116,7 +115,7 @@ def build_graph(checkpointer, services):
                 elif verdict.verdict == 'suspicious':
                     policy = {'decision': 'require_approval', 'reasons': verdict.reasons, 'policy_version': 'test-adapter'}
         else:
-            policy = services.tool_policy.evaluate(call, context, agent_allowed_tools=_allowed_names(services, state['active_agent']), calls_used=state['tool_call_count'], max_calls=settings.poseidon_max_tool_calls).model_dump()
+            policy = services.tools.decide(call, context, agent_allowed_tools=_allowed_names(services, state['active_agent']), calls_used=state['tool_call_count'], max_calls=settings.poseidon_max_tool_calls).model_dump()
         return {'pending_tool_calls': queue, 'current_tool_call': call, 'policy_decision': policy, 'approval_status': ''}
 
     def route_call(state):
@@ -144,7 +143,7 @@ def build_graph(checkpointer, services):
 
     async def tool_executor(state):
         call = state['current_tool_call']
-        tool = get_tool(call['name'])
+        tool = services.tools.get(call['name'])
         external_result = bool(tool and tool['trusted_provenance'] != 'built_in')
         if state['policy_decision']['decision'] == 'deny' or state.get('approval_status') == 'denied':
             return _finish_call(state, {'error': 'denied', 'detail': 'Action denied. No changes were made.'})
@@ -174,7 +173,7 @@ def build_graph(checkpointer, services):
                 result = await services.tool_executor(call['name'], arguments)
             else:
                 context = ToolExecutionContext(actor=state['actor'], conversation_key=state['conversation_key'], run_id=state['run_id'], agent_id=state['active_agent'], is_tainted=state['is_tainted'], taint_sources=state['taint_sources'])
-                result = await services.tool_execution_service.execute(call, context, approval_granted=state.get('approval_status') == 'approved')
+                result = await services.tools.execute(call, context, approval_granted=state.get('approval_status') == 'approved')
             result = json.loads(json.dumps(result, default=str))
         except ExecutionTimeoutError:
             uncertain = True
@@ -297,7 +296,7 @@ async def resume_approval(approval_id, decision, *, owner_id='local_owner', conv
             raise ValueError('Approval has no resumable checkpoint or was already consumed')
         state = snapshot.values
         runtime.services.approvals.validate(request, owner_id, state['current_tool_call'], state['conversation_key'], policy_version=state['policy_decision'].get('policy_version'))
-        if runtime.services.tool_tier is None and request['policy_version'] != runtime.services.tool_policy.policy_version:
+        if runtime.services.tool_tier is None and request['policy_version'] != runtime.services.tools.policy_version:
             raise ValueError('Approval policy version mismatch')
         if conversation_key is not None and conversation_key.model_dump() != state['conversation_key']:
             raise ValueError('Approval belongs to another conversation')

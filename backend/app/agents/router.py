@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.orchestration.graph import DEFAULT_PRIMARY_AGENT
-from app.soul import soul_store
+from app.agents import DEFAULT_PRIMARY_AGENT
+from app.agents.profiles import soul_store
 
 
 class UnknownAgentError(ValueError):

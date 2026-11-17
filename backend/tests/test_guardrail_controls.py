@@ -9,19 +9,19 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.config import settings
-from app.db.connection import connection
-from app.db.migrations import apply_migrations
-from app.gateway.telegram_adapter import deliver_reply, process_telegram_update
+from app.storage.connection import connection
+from app.storage.migrations import apply_migrations
+from app.channels.telegram import deliver_reply, process_telegram_update
 from app.main import app
 from app.models import ActorContext, ConversationKey, InboundEvent
-from app.orchestration.approval_store import ApprovalStore
-from app.orchestration.graph import HarnessRuntime, HarnessServices, resume_approval, run_agent
+from app.runtime.approval_store import ApprovalStore
+from app.runtime.graph import HarnessRuntime, HarnessServices, resume_approval, run_agent
 from app.security.guardrails import GuardrailRateLimitError, GuardrailStore, HarnessPausedError, guardrail_store
 from app.tools.registry import BASE_TOOL_REGISTRY, execute_tool
 
 
 def test_documented_builtin_tiers_match_registry():
-    doc = (Path(__file__).resolve().parents[2] / 'GUARDRAILS.md').read_text(encoding='utf-8')
+    doc = (Path(__file__).resolve().parents[1] / 'policy' / 'GUARDRAILS.md').read_text(encoding='utf-8')
     auto = doc.split('### Auto-run', 1)[1].split('### Guarded auto-run', 1)[0]
     guarded = doc.split('### Guarded auto-run', 1)[1].split('### Approval required', 1)[0]
     approval = doc.split('### Approval required', 1)[1].split('**No auto-trust promotion', 1)[0]
@@ -44,7 +44,7 @@ def test_pause_api_is_durable_and_blocks_direct_tool_execution():
 
 def test_web_chat_pause_command_does_not_call_agent():
     client = TestClient(app, client=('127.0.0.1', 50000))
-    with patch('app.gateway.web_adapter.run_agent', new_callable=AsyncMock) as run:
+    with patch('app.api.chat.run_agent', new_callable=AsyncMock) as run:
         paused = client.post('/chat', json={'text': '/pause', 'thread_id': 'control'})
         assert paused.status_code == 200
         assert guardrail_store.is_paused()
@@ -132,7 +132,7 @@ def test_outbound_limit_is_atomic_across_store_instances(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_telegram_send_limit_counts_failed_attempts_and_retries(monkeypatch):
     monkeypatch.setattr(settings, 'poseidon_outbound_msg_rate_limit', 1)
-    with patch('app.gateway.telegram_adapter.send_telegram_reply', new_callable=AsyncMock) as send:
+    with patch('app.channels.telegram.send_telegram_reply', new_callable=AsyncMock) as send:
         send.return_value = False
         with pytest.raises(RuntimeError, match='delivery failed'):
             await deliver_reply('fake-token', 123, 'first')
@@ -151,8 +151,8 @@ async def test_telegram_operator_can_pause_and_resume_without_running_agent(monk
     monkeypatch.setattr(settings, 'telegram_allowed_user_ids', '12345')
     def update(text):
         return {'message': {'from': {'id': 12345}, 'chat': {'id': 12345}, 'text': text}}
-    with patch('app.gateway.telegram_adapter.send_telegram_reply', new_callable=AsyncMock, return_value=True), \
-         patch('app.gateway.telegram_adapter.run_agent', new_callable=AsyncMock) as run:
+    with patch('app.channels.telegram.send_telegram_reply', new_callable=AsyncMock, return_value=True), \
+         patch('app.channels.telegram.run_agent', new_callable=AsyncMock) as run:
         paused = await process_telegram_update(update('/pause'), bot_token='fake-token')
         assert 'paused' in paused['reply']
         assert guardrail_store.is_paused()

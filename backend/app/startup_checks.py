@@ -3,7 +3,7 @@ import sqlite3
 import sys
 from tempfile import TemporaryDirectory
 from pathlib import Path
-from app.db.connection import connection
+from app.storage.connection import connection
 
 
 def check_runtime():

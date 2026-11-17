@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.orchestration.graph import run_agent, resume_approval
-from app.orchestration.state import InboundEvent
-from app.orchestration.approval_store import approval_store
+from app.runtime.graph import run_agent, resume_approval
+from app.runtime.state import InboundEvent
+from app.runtime.approval_store import approval_store
 
 
 @pytest.mark.asyncio

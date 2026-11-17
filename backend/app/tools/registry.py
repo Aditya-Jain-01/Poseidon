@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, Callable
-from app.soul import soul_store
+from app.agents.profiles import soul_store
 from app.models import RESERVED_ARGUMENTS
 from app.security.sandbox import ExecutionGuard
-from . import calendar, crm, notes_reminders, skill_manage
+from app.tools.builtins import calendar, crm, notes_reminders, skill_manage
 
 
 def _schema(name: str, description: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:

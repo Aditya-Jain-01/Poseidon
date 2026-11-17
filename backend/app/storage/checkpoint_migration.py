@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from app.db.connection import connection
+from app.storage.connection import connection
 
 
 def copy_legacy_checkpoints(data_db_path: Path, checkpoint_db_path: Path) -> bool:

@@ -5,8 +5,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from app.config import settings
-from app.db.connection import connection
-from app.db.migrations import apply_migrations
+from app.storage.connection import connection
+from app.storage.migrations import apply_migrations
 from app.models import ConversationKey
 from app.security.guardrails import GuardrailRateLimitError, HarnessPausedError, record_limit_alert
 

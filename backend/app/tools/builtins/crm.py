@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import uuid4
-from .personal_data import personal_data
-from ._storage import read_json as _legacy_read_json
+from app.storage.personal_data import personal_data
+from app.storage.legacy_json import read_json as _legacy_read_json
 read_json = _legacy_read_json
 
 

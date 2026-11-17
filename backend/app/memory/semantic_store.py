@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any, Generator
 
 from app.config import settings
-from app.db.connection import connection
-from app.db.migrations import apply_migrations
+from app.storage.connection import connection
+from app.storage.migrations import apply_migrations
 
 
 def _sanitize_fts_query(query: str) -> str:

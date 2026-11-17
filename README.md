@@ -138,19 +138,24 @@ See [.env.example](.env.example) for additional options and [config.py](backend/
 ```text
 backend/
   app/
-    agents/          Conversational and summarizer agents
-    db/              SQLite connections and migrations
-    gateway/         REST and Telegram adapters
+    agents/          Agent definitions, routing, and model providers
+    api/             Operator HTTP routes
+    channels/        Telegram transport and delivery
     memory/          Retrieval, storage, and consolidation
-    orchestration/   Execution graph, checkpoints, and approvals
+    runtime/         Conversation graph, checkpoints, and approvals
     security/        Identity, redaction, risk checks, and auditing
-    tools/           Tool registry, policy, and personal data repositories
+    storage/         SQLite, migrations, and personal data repositories
+    tools/           Tool interface, policy, and reviewed built-in handlers
   scripts/           Integration and release checks
   tests/             Backend test suite
 frontend/
   src/               React interface and frontend tests
 memory-store/        Agent and skill files; local runtime data
 ```
+
+HTTP routes and Telegram start runs through `app.runtime.runner`. The runtime
+uses `app.tools.access` for tool descriptions, policy decisions, and execution;
+tool handlers and SQLite repositories stay behind those module interfaces.
 
 Runtime locations are configurable. The current settings default the database, agent directory, and model configuration to the repository's `memory-store/`; use `POSEIDON_DB_PATH`, `AGENTS_DIR`, and `LLM_CONFIG_PATH` to select another location. Browser chat history is stored separately in `localStorage`.
 

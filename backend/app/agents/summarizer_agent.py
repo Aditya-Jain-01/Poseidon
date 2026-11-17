@@ -12,7 +12,7 @@ import re
 from typing import Any
 from openai import AsyncOpenAI
 
-from app.llm_providers import llm_provider
+from app.agents.providers import llm_provider
 from app.memory.semantic_store import semantic_store
 from app.memory.procedural_store import procedural_store
 from app.memory.episodic_store import episodic_store

@@ -139,7 +139,7 @@ class LLMProvider:
         preset = override.get("preset")
 
         if not preset and aid != "poseidon":
-            from app.soul import soul_store
+            from app.agents.profiles import soul_store
             agent = soul_store.get_agent(aid)
             if agent:
                 preset = agent.get("model_preset")
@@ -264,7 +264,7 @@ class LLMProvider:
 
     def get_all_configs(self) -> dict[str, Any]:
         """Return safe view of .env provider config for UI display."""
-        from app.soul import soul_store
+        from app.agents.profiles import soul_store
 
         conf = self.get_agent_resolved_config("poseidon")
         agents_data: dict[str, Any] = {}

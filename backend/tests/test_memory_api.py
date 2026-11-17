@@ -11,7 +11,7 @@ from app.main import app
 from app.memory.episodic_store import EpisodicStore
 from app.memory.semantic_store import SemanticStore
 from app.memory.procedural_store import ProceduralStore
-import app.gateway.memory_adapter as adapter_module
+import app.api.memory as adapter_module
 import app.agents.summarizer_agent as summarizer_module
 import app.memory.consolidation as consol_module
 

@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.soul import SoulStore, _parse_frontmatter, _dump_frontmatter, PREBUILT_IDS, MAX_CUSTOM_AGENTS
-import app.soul as soul_module
+from app.agents.profiles import SoulStore, _parse_frontmatter, _dump_frontmatter, PREBUILT_IDS, MAX_CUSTOM_AGENTS
+import app.agents.profiles as soul_module
 
 
 class TestSoulStore(unittest.TestCase):

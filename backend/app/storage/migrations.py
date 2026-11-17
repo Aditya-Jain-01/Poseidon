@@ -2,7 +2,7 @@
 import hashlib
 import json
 import sqlite3
-from app.db.connection import connection
+from app.storage.connection import connection
 
 MEMORY_SQL = (
     """CREATE TABLE IF NOT EXISTS semantic_facts (

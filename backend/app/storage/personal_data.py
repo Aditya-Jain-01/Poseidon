@@ -10,8 +10,8 @@ from uuid import uuid4
 from typing import Any
 
 from app.config import settings
-from app.db.connection import connection
-from app.db.migrations import apply_migrations
+from app.storage.connection import connection
+from app.storage.migrations import apply_migrations
 
 
 class PersonalDataRepository:

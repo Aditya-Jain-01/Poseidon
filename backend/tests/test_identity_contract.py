@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 def test_chat_ignores_forged_identity_and_channel(monkeypatch):
     from app.main import app
-    import app.gateway.web_adapter as adapter
+    import app.api.chat as adapter
     captured = []
     async def fake_run(event, run_id, agent_id):
         captured.append(event)
@@ -23,7 +23,7 @@ def test_chat_ignores_forged_identity_and_channel(monkeypatch):
 
 def test_chat_uses_text_agent_selection(monkeypatch):
     from app.main import app
-    import app.gateway.web_adapter as adapter
+    import app.api.chat as adapter
 
     selected = []
     async def fake_run(event, run_id, agent_id):
@@ -76,7 +76,7 @@ def test_unsafe_bind_and_cors_rejected(monkeypatch):
 def test_telegram_empty_allowlist_rejects_and_verified_sender_maps_owner(monkeypatch):
     from app.config import settings
     from app.security.identity import telegram_actor
-    from app.gateway.telegram_adapter import is_user_allowed
+    from app.channels.telegram import is_user_allowed
     monkeypatch.setattr(settings, 'telegram_allowed_user_ids', '')
     assert not is_user_allowed(123)
     with pytest.raises(ValueError, match='Unauthorized'):
@@ -87,7 +87,7 @@ def test_telegram_empty_allowlist_rejects_and_verified_sender_maps_owner(monkeyp
 
 def test_secret_canary_absent_from_public_provider_config_and_disk(monkeypatch, tmp_path):
     from app.config import settings
-    from app.llm_providers import LLMProvider
+    from app.agents.providers import LLMProvider
     monkeypatch.setattr(settings, 'poseidon_api_key', 'secret-canary-that-must-not-leak')
     provider = LLMProvider()
     provider._config_path = tmp_path / 'llm.json'

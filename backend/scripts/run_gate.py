@@ -108,8 +108,8 @@ def _call(name="calendar_create", id="c1", **arguments):
 
 
 def _services(db, llm, executor=None, tier=None):
-    from app.orchestration.graph import HarnessServices
-    from app.orchestration.approval_store import ApprovalStore
+    from app.runtime.graph import HarnessServices
+    from app.runtime.approval_store import ApprovalStore
     allowed = ["calendar_create", "calendar_read", "crm_read",
                "notes_reminders_create", "notes_reminders_delete"]
     return HarnessServices(
@@ -129,8 +129,8 @@ def _services(db, llm, executor=None, tier=None):
 
 # 1 — Migration idempotency
 def test_migration_idempotency(tmp_path):
-    from app.db.migrations import apply_migrations
-    from app.db.connection import connection
+    from app.storage.migrations import apply_migrations
+    from app.storage.connection import connection
     db = tmp_path / "m.db"
     schemas = []
     for _ in range(3):
@@ -144,7 +144,7 @@ def test_migration_idempotency(tmp_path):
 # 2 — Forged identity ignored
 def test_forged_identity_ignored(monkeypatch):
     from app.main import app
-    import app.gateway.web_adapter as adapter
+    import app.api.chat as adapter
     captured = []
     async def fake_run(event, run_id, agent_id):
         captured.append(event)
@@ -165,7 +165,7 @@ def test_forged_identity_ignored(monkeypatch):
 @pytest.mark.asyncio
 async def test_conversation_isolation(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent
+    from app.runtime.graph import HarnessRuntime, run_agent
     llm = AsyncMock(return_value={"content": "reply", "tool_calls": []})
     svc = _services(tmp_path / "iso.db", llm)
     rt = HarnessRuntime(InMemorySaver(), svc)
@@ -179,7 +179,7 @@ async def test_conversation_isolation(tmp_path):
 # 4 — Secret redaction
 def test_secret_redaction(monkeypatch, tmp_path):
     from app.config import settings
-    from app.llm_providers import LLMProvider
+    from app.agents.providers import LLMProvider
     monkeypatch.setattr(settings, "poseidon_api_key", "sec-gate-canary-xyz")
     provider = LLMProvider()
     provider._config_path = tmp_path / "llm.json"
@@ -212,7 +212,7 @@ def test_unsafe_bind_rejection(monkeypatch):
 @pytest.mark.asyncio
 async def test_multi_tool_ordering(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent, resume_approval
+    from app.runtime.graph import HarnessRuntime, run_agent, resume_approval
     calls = [_call("calendar_read", "c1"), _call("calendar_create", "c2", title="Gate"), _call("crm_read", "c3")]
     llm = AsyncMock(side_effect=[{"tool_calls": calls}, {"content": "done"}])
     executor = AsyncMock(return_value={"ok": True})
@@ -230,7 +230,7 @@ async def test_multi_tool_ordering(tmp_path):
 @pytest.mark.asyncio
 async def test_suspicious_note_interrupt(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent, resume_approval
+    from app.runtime.graph import HarnessRuntime, run_agent, resume_approval
     llm = AsyncMock(side_effect=[
         {"tool_calls": [_call("notes_reminders_create", "n1", text="see https://example.com", kind="note")]},
         {"content": "saved"},
@@ -248,8 +248,8 @@ async def test_suspicious_note_interrupt(tmp_path):
 @pytest.mark.asyncio
 async def test_approval_expiry(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent, resume_approval
-    from app.db.connection import connection
+    from app.runtime.graph import HarnessRuntime, run_agent, resume_approval
+    from app.storage.connection import connection
     llm = AsyncMock(side_effect=[{"tool_calls": [_call("calendar_create", "exp1", title="Expiry")]}])
     rt = HarnessRuntime(InMemorySaver(), _services(tmp_path / "exp.db", llm))
     first = await run_agent(_event(), "expiry-gate", runtime=rt)
@@ -266,7 +266,7 @@ async def test_approval_expiry(tmp_path):
 @pytest.mark.asyncio
 async def test_approval_denial(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent, resume_approval
+    from app.runtime.graph import HarnessRuntime, run_agent, resume_approval
     from langchain_core.messages import ToolMessage
     llm = AsyncMock(side_effect=[
         {"tool_calls": [_call("calendar_create", "d1"), _call("crm_read", "d2")]},
@@ -287,7 +287,7 @@ async def test_approval_denial(tmp_path):
 @pytest.mark.asyncio
 async def test_approval_replay_blocked(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent, resume_approval
+    from app.runtime.graph import HarnessRuntime, run_agent, resume_approval
     llm = AsyncMock(side_effect=[{"tool_calls": [_call("calendar_create", "r1", title="Replay")]}, {"content": "done"}])
     executor = AsyncMock(return_value={"ok": True})
     rt = HarnessRuntime(InMemorySaver(), _services(tmp_path / "replay.db", llm, executor))
@@ -302,7 +302,7 @@ async def test_approval_replay_blocked(tmp_path):
 @pytest.mark.asyncio
 async def test_approval_argument_substitution_blocked(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent, resume_approval
+    from app.runtime.graph import HarnessRuntime, run_agent, resume_approval
     llm = AsyncMock(side_effect=[{"tool_calls": [_call("calendar_create", "arg1", title="Original")]}, {"content": "done"}])
     executor = AsyncMock(return_value={"ok": True})
     rt = HarnessRuntime(InMemorySaver(), _services(tmp_path / "argbind.db", llm, executor))
@@ -316,13 +316,13 @@ async def test_approval_argument_substitution_blocked(tmp_path):
 # 8e — Restart: pending approval persists via SQLite
 @pytest.mark.asyncio
 async def test_approval_survives_restart(tmp_path):
-    from app.orchestration.approval_store import ApprovalStore
-    from app.db.migrations import apply_migrations
+    from app.runtime.approval_store import ApprovalStore
+    from app.storage.migrations import apply_migrations
     db = tmp_path / "restart.db"
     apply_migrations(db)
     store_a = ApprovalStore(db)
     approval_id = "gate-restart-id"
-    from app.db.connection import connection
+    from app.storage.connection import connection
     with connection(db) as conn:
         from datetime import datetime, timezone, timedelta
         import json, hashlib
@@ -356,7 +356,7 @@ async def test_approval_survives_restart(tmp_path):
 @pytest.mark.asyncio
 async def test_tool_execution_idempotency(tmp_path):
     from langgraph.checkpoint.memory import InMemorySaver
-    from app.orchestration.graph import HarnessRuntime, run_agent
+    from app.runtime.graph import HarnessRuntime, run_agent
     llm = AsyncMock(return_value={"content": "hello", "tool_calls": []})
     executor = AsyncMock(return_value={"ok": True})
     rt = HarnessRuntime(InMemorySaver(), _services(tmp_path / "idem.db", llm, executor))
@@ -382,8 +382,8 @@ def test_taint_escalation():
 async def test_concurrent_personal_data_writes(tmp_path):
     import asyncio
     import concurrent.futures
-    from app.db.migrations import apply_migrations
-    from app.db.connection import connection
+    from app.storage.migrations import apply_migrations
+    from app.storage.connection import connection
     db = tmp_path / "conc.db"
     apply_migrations(db)
     async def write(i):
@@ -406,7 +406,7 @@ async def test_concurrent_personal_data_writes(tmp_path):
 
 # 12 — Memory update / forget / re-embed
 def test_memory_update_forget_re_embed(tmp_path):
-    from app.db.migrations import apply_migrations
+    from app.storage.migrations import apply_migrations
     from app.memory.semantic_store import SemanticStore
     db = tmp_path / "mem.db"
     apply_migrations(db)
@@ -425,7 +425,7 @@ def test_memory_update_forget_re_embed(tmp_path):
 # 13 — Agent selection and permission enforcement
 def test_agent_selection_and_permission_enforcement(monkeypatch):
     from app.main import app
-    import app.gateway.web_adapter as adapter
+    import app.api.chat as adapter
     async def fake_run(event, run_id, agent_id):
         return {"reply": "ok", "run_id": run_id,
                 "thread_id": event.channel_thread_id,
@@ -442,16 +442,16 @@ def test_agent_selection_and_permission_enforcement(monkeypatch):
 # 14a — Telegram duplicate update
 @pytest.mark.asyncio
 async def test_telegram_duplicate_update_handling():
-    from app.gateway.telegram_adapter import process_telegram_update
+    from app.channels.telegram import process_telegram_update
     from app.config import settings
     update = {
         "update_id": 88001,
         "message": {"message_id": 1, "from": {"id": 12345, "first_name": "User"},
                     "chat": {"id": 12345, "type": "private"}, "text": "hello"},
     }
-    with patch("app.gateway.telegram_adapter.run_agent", new_callable=AsyncMock) as mock_run:
+    with patch("app.channels.telegram.run_agent", new_callable=AsyncMock) as mock_run:
         mock_run.return_value = {"reply": "ok", "run_id": "r1"}
-        with patch("app.gateway.telegram_adapter.send_telegram_reply", new_callable=AsyncMock):
+        with patch("app.channels.telegram.send_telegram_reply", new_callable=AsyncMock):
             with patch.object(settings, "telegram_allowed_user_ids", "12345"):
                 r1 = await process_telegram_update(update, bot_token="fake")
                 r2 = await process_telegram_update(update, bot_token="fake")
@@ -463,8 +463,8 @@ async def test_telegram_duplicate_update_handling():
 # 14b — Telegram restart: unfinished updates present after DB restart
 @pytest.mark.asyncio
 async def test_telegram_restart_retries_unfinished(tmp_path):
-    from app.db.migrations import apply_migrations
-    from app.db.connection import connection
+    from app.storage.migrations import apply_migrations
+    from app.storage.connection import connection
     db = tmp_path / "tg_restart.db"
     apply_migrations(db)
     with connection(db) as conn:
@@ -491,7 +491,7 @@ def test_frontend_approval_failure_and_session_binding():
 # 16 — Graceful shutdown: audit events persist
 @pytest.mark.asyncio
 async def test_graceful_shutdown_audit_events_persist(tmp_path):
-    from app.db.migrations import apply_migrations
+    from app.storage.migrations import apply_migrations
     from app.security.audit import AuditService
     db = tmp_path / "audit.db"
     apply_migrations(db)

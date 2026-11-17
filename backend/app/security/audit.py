@@ -8,9 +8,9 @@ from typing import Any
 from uuid import uuid4
 
 from app.config import settings
-from app.db.connection import connection
+from app.storage.connection import connection
 from app.security.secrets import redact
-from app.orchestration.trajectory import _scrub
+from app.runtime.trajectory import _scrub
 
 
 def _bound_payload(data: Any, max_string_len: int = 4096, max_total_bytes: int = 32768) -> Any:

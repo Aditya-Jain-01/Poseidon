@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 from fastapi import APIRouter, Depends, Query
-from app.orchestration.trajectory import trajectory_store
+from app.runtime.trajectory import trajectory_store
 from app.security.audit import audit_service
 from app.models import ActorContext
 from app.security.identity import resolve_actor

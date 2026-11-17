@@ -18,8 +18,8 @@ import asyncio
 import json
 from dataclasses import dataclass
 from app.models import ConversationKey
-from app.db.connection import connection
-from app.orchestration.approval_store import canonical_json
+from app.storage.connection import connection
+from app.runtime.approval_store import canonical_json
 from pathlib import Path
 from typing import Any
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
@@ -28,7 +28,7 @@ from app.config import settings
 from app.memory.episodic_store import episodic_store
 from app.memory.semantic_store import semantic_store
 from app.memory.procedural_store import procedural_store
-from app.soul import soul_store
+from app.agents.profiles import soul_store
 
 
 @dataclass(frozen=True)

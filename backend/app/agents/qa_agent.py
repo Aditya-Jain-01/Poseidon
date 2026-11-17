@@ -12,8 +12,8 @@ import json
 from typing import Any
 from langchain_core.messages import BaseMessage, SystemMessage
 
-from app.soul import soul_store
-from app.llm_providers import llm_provider
+from app.agents.profiles import soul_store
+from app.agents.providers import llm_provider
 from app.security.secrets import redact
 
 

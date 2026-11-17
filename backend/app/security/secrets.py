@@ -9,7 +9,7 @@ def redact(value):
     secrets = [getattr(settings, key, '') for key in ('poseidon_api_key', 'openrouter_api_key', 'nvidia_api_key', 'kraken_api_key', 'poseidon_api_token', 'telegram_bot_token', 'telegram_webhook_secret')]
     secrets.extend(v for k, v in os.environ.items() if k.endswith(('_API_KEY', '_TOKEN', '_SECRET')))
     # Credential references may use arbitrary environment-variable names.
-    module = sys.modules.get('app.llm_providers')
+    module = sys.modules.get('app.agents.providers')
     provider = getattr(module, 'llm_provider', None)
     if provider is not None:
         configs = [*provider._providers.values(), *provider._agent_overrides.values()]

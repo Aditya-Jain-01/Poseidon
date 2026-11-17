@@ -2,8 +2,8 @@
 
 from unittest.mock import patch
 
-from app.tools.crm import crm_read
-from app.tools.notes_reminders import notes_reminders_read
+from app.tools.builtins.crm import crm_read
+from app.tools.builtins.notes_reminders import notes_reminders_read
 from app.tools.registry import get_tool
 
 
@@ -12,13 +12,13 @@ def test_notes_read_accepts_null_as_read_all() -> None:
         "notes": [{"id": "n1", "text": "alpha"}],
         "reminders": [{"id": "r1", "text": "beta"}],
     }
-    with patch("app.tools.notes_reminders.read_json", return_value=stored):
+    with patch("app.tools.builtins.notes_reminders.read_json", return_value=stored):
         assert notes_reminders_read(None) == stored
 
 
 def test_crm_read_accepts_null_as_read_all() -> None:
     stored = {"contacts": [{"id": "c1", "name": "Ada"}]}
-    with patch("app.tools.crm.read_json", return_value=stored):
+    with patch("app.tools.builtins.crm.read_json", return_value=stored):
         result = crm_read(None)
     assert result == {"contacts": stored["contacts"], "count": 1}
 

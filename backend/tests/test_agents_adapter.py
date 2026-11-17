@@ -7,9 +7,9 @@ from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.soul import SoulStore
-import app.gateway.agents_adapter as agents_adapter_module
-from app.orchestration.trajectory import trajectory_store
+from app.agents.profiles import SoulStore
+import app.api.agents as agents_adapter_module
+from app.runtime.trajectory import trajectory_store
 
 
 class TestAgentsAdapterAPI(unittest.TestCase):
@@ -33,11 +33,11 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self._orig_soul = agents_adapter_module.soul_store
         agents_adapter_module.soul_store = self.soul_store
 
-        self._patcher = patch("app.soul._get_agents_dir", return_value=self.agents_dir)
+        self._patcher = patch("app.agents.profiles._get_agents_dir", return_value=self.agents_dir)
         self._patcher.start()
 
         self.tmp_config = Path(self.tmpdir.name) / "llm_config.json"
-        from app.llm_providers import llm_provider
+        from app.agents.providers import llm_provider
         self._orig_llm_config_path = llm_provider._config_path
         self._orig_agent_overrides = {k: dict(v) for k, v in llm_provider._agent_overrides.items()}
         llm_provider._config_path = self.tmp_config
@@ -45,7 +45,7 @@ class TestAgentsAdapterAPI(unittest.TestCase):
         self.client = TestClient(app, client=('127.0.0.1', 50000))
 
     def tearDown(self):
-        from app.llm_providers import llm_provider
+        from app.agents.providers import llm_provider
         llm_provider._config_path = self._orig_llm_config_path
         llm_provider._agent_overrides = self._orig_agent_overrides
         self._patcher.stop()

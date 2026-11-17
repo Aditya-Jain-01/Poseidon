@@ -15,8 +15,8 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.orchestration.graph import run_agent, resume_approval
-from app.orchestration.state import InboundEvent
+from app.runtime.runner import run_agent, resume_approval
+from app.runtime.state import InboundEvent
 from app.models import ActorContext, ConversationKey, Identifier
 from app.security.identity import resolve_actor
 from app.security.secrets import redact
@@ -106,7 +106,7 @@ async def chat(req: ChatRequest, request: Request, actor: ActorContext = Depends
         return ChatResponse(reply=reply, run_id=run_id, thread_id=event.conversation_key.thread_id,
                             conversation_key=event.conversation_key)
     try:
-        from app.orchestration.router import route_request, UnknownAgentError
+        from app.agents.router import route_request, UnknownAgentError
         target_agent = route_request(req.text, explicit_agent_id=req.agent_id)
         result = await run_agent(event, run_id, agent_id=target_agent)
     except UnknownAgentError as e:

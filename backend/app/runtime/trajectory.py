@@ -47,7 +47,7 @@ class TrajectoryStore:
         # Persist to SQLite if DB exists
         if self.db_path.exists():
             try:
-                from app.db.connection import connection
+                from app.storage.connection import connection
 
                 with connection(self.db_path) as conn:
                     # Determine next step_index
@@ -80,7 +80,7 @@ class TrajectoryStore:
         # If not in-memory (e.g. after server restart), read from SQLite
         if self.db_path.exists():
             try:
-                from app.db.connection import connection
+                from app.storage.connection import connection
 
                 with connection(self.db_path) as conn:
                     rows = conn.execute(

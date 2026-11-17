@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import uuid4
-from .personal_data import personal_data
+from app.storage.personal_data import personal_data
 
 
 def calendar_read(query: str | None = "", *, owner_id: str = 'local_owner') -> dict[str, Any]:
