@@ -357,6 +357,48 @@ async def process_telegram_update(update: dict[str, Any], bot_token: str = "") -
                 )
                 return {"status": "processed", "reply": reply_text, "chat_id": chat_id, "sender_id": sender_id}
 
+        if command == '/brain' or command.startswith('/brain '):
+            from app.brain.service import BrainService, BrainUnavailable
+
+            brain = BrainService(settings.brain_vault_path, settings.poseidon_db_path)
+            action = text[6:].strip()
+            try:
+                if action.lower().startswith('add '):
+                    parts = action[4:].split('|', 1)
+                    if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+                        reply_text = 'Use /brain add Title | source text'
+                    else:
+                        saved = await brain.add_source(actor.owner_id, parts[0].strip(), parts[1].strip(),
+                                                       source_key=f'telegram:{sender_id}:{update_id}' if update_id is not None else None)
+                        scan = saved['scan']
+                        reply_text = (f"Saved {saved['path']}. Processed {len(scan['processed'])}, "
+                                      f"failed {len(scan['failed'])}.")
+                        if scan['failed']:
+                            reply_text += f" First error: {scan['failed'][0]['error']}"
+                elif action.lower().startswith('ask '):
+                    answer = await brain.query(actor.owner_id, action[4:].strip())
+                    paths = list(dict.fromkeys(source['path'] for source in answer['sources']))
+                    reply_text = answer['answer'] + ("\nSources: " + ", ".join(paths) if paths else "")
+                elif action.lower() == 'scan':
+                    scan = await brain.sync(actor.owner_id)
+                    reply_text = f"Processed {len(scan['processed'])}, unchanged {len(scan['unchanged'])}, failed {len(scan['failed'])}."
+                elif action.lower() == 'lint':
+                    report = await brain.lint(actor.owner_id)
+                    reply_text = f"Brain health: {len(report['issues'])} issues. Conflict check: {report['semantic_check']}."
+                    if report['issues']:
+                        reply_text += "\n" + "\n".join(f"- {item['kind']}: {item['path']}" for item in report['issues'][:10])
+                else:
+                    reply_text = 'Brain commands: /brain add Title | source text, /brain ask question, /brain scan, /brain lint'
+            except BrainUnavailable as exc:
+                reply_text = f"Brain: {exc}"
+            reply_text = reply_text[:3900]
+            await send_and_complete(update_id, token, chat_id, sender_id, reply_text)
+            audit_service.record_event(run_id=run_id, owner_id=actor.owner_id, channel='telegram',
+                                       direction='outbound', event_type='brain_reply', status='completed',
+                                       payload={'command': action.split(' ', 1)[0].lower(), 'reply': reply_text})
+            return {'status': 'processed', 'run_id': run_id, 'reply': reply_text,
+                    'chat_id': chat_id, 'sender_id': sender_id}
+
         tainted = is_channel_untrusted("telegram")
         event = InboundEvent(
             actor=actor,

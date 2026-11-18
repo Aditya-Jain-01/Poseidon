@@ -11,10 +11,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.agents.providers import llm_provider
+from app.brain.service import BrainService
 from app.api.chat import router as web_router
 from app.channels.telegram import router as telegram_router, poller as telegram_poller
 from app.api.memory import router as memory_router
 from app.api.agents import router as agents_router
+from app.api.brain import router as brain_router
 from app.api.runs import router as trajectory_router
 from app.storage.migrations import apply_migrations
 from app.storage.checkpoint_migration import copy_legacy_checkpoints
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI):
     validate_network_config()
     app.state.capabilities = check_runtime()
     apply_migrations(settings.poseidon_db_path, settings.poseidon_embedding_dim)
+    BrainService(settings.brain_vault_path, settings.poseidon_db_path).ensure_vault()
     with connection(settings.poseidon_db_path) as conn:
         vector_schema = conn.execute("SELECT sql FROM sqlite_master WHERE name='vec_episodes'").fetchone()[0]
         if 'USING vec0' not in vector_schema:
@@ -92,6 +95,7 @@ app.include_router(web_router, dependencies=[Depends(resolve_actor)])
 app.include_router(telegram_router)
 app.include_router(memory_router, dependencies=[Depends(resolve_actor)])
 app.include_router(agents_router, dependencies=[Depends(resolve_actor)])
+app.include_router(brain_router)
 app.include_router(trajectory_router, dependencies=[Depends(resolve_actor)])
 
 

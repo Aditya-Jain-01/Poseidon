@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     poseidon_checkpoint_db_path: Path | None = None
     agents_dir: Path = Field(default=_PROJECT_ROOT / "memory-store" / "agents")
     llm_config_path: Path = Field(default=_PROJECT_ROOT / "memory-store" / "llm_config.json")
+    poseidon_brain_vault_path: Path | None = None
+    poseidon_brain_allow_remote_model: bool = Field(default=False)
 
     poseidon_embedding_model: str = Field("all-MiniLM-L6-v2", description="HuggingFace sentence-transformers model name")
     poseidon_embedding_dim: int = Field(384, description="Embedding vector dimension (must match the chosen model)")
@@ -54,6 +56,10 @@ class Settings(BaseSettings):
     @property
     def checkpoint_db_path(self) -> Path:
         return self.poseidon_checkpoint_db_path or self.poseidon_db_path.with_name('checkpoints.db')
+
+    @property
+    def brain_vault_path(self) -> Path:
+        return self.poseidon_brain_vault_path or self.poseidon_db_path.parent / 'brain'
 
     model_config = {
         "env_file": str(_PROJECT_ROOT / ".env"),

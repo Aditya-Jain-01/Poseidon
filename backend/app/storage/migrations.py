@@ -96,6 +96,13 @@ MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL), (4, TEL
                   "INSERT INTO guardrail_state(id,paused,updated_at) VALUES (1,0,CURRENT_TIMESTAMP)",
                   "CREATE TABLE outbound_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, channel TEXT NOT NULL, created_at TEXT NOT NULL)",
                   "CREATE INDEX idx_outbound_attempts_created ON outbound_attempts(created_at)",
+              )),
+              (7, (
+                  "CREATE TABLE brain_sources (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, path TEXT NOT NULL, content_hash TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(owner_id,path))",
+                  "CREATE TABLE brain_nodes (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, file_name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(owner_id,title), UNIQUE(owner_id,file_name))",
+                  "CREATE TABLE brain_entries (node_id TEXT NOT NULL REFERENCES brain_nodes(id), source_id TEXT NOT NULL REFERENCES brain_sources(id) ON DELETE CASCADE, summary TEXT NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(node_id,source_id))",
+                  "CREATE INDEX idx_brain_sources_owner ON brain_sources(owner_id,path)",
+                  "CREATE INDEX idx_brain_nodes_owner ON brain_nodes(owner_id,title)",
               )))
 
 

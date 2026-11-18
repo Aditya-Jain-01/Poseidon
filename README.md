@@ -14,6 +14,7 @@ Built with **Python, FastAPI, LangGraph, SQLite, React, and Vite**. Supports Ope
 - **Agent configuration:** define personas, tool permissions, routing signals, and per-agent model settings.
 - **Execution visibility:** inspect trajectories, memory, audit events, and model configuration in the web interface.
 - **Multiple interfaces:** interact through the browser, REST API, or Telegram, with durable receipt tracking for Telegram updates.
+- **Local brain (initial slice):** scan text and Markdown notes into source-backed topic pages that Obsidian can display.
 
 ## Architecture
 
@@ -114,6 +115,46 @@ Open `http://localhost:5173`. Vite proxies API requests to the backend on port `
 
 Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `TELEGRAM_POLLING_ENABLED=true` in `.env`, then restart the backend. Allowed user IDs are comma-separated; an empty allowlist rejects all senders. To use the webhook adapter, configure `TELEGRAM_WEBHOOK_SECRET`; requests are rejected while it is unset.
 
+### Local brain and Obsidian
+
+On first backend startup, Poseidon creates `memory-store/brain/raw` and
+`memory-store/brain/wiki` inside the cloned project, plus `schema.md` describing
+the vault. Open `memory-store/brain`
+as an existing Obsidian vault. To use a different local vault, set an absolute
+`POSEIDON_BRAIN_VAULT_PATH` in `.env` and restart the backend. Vault contents
+are ignored by Git because they are user data.
+Put `.md` or `.txt` notes in its `raw/` folder. The **Brain** screen's **Scan raw
+sources** button asks Poseidon's configured model to assign each changed note to
+up to four topics. Poseidon writes source-backed pages and an index into `wiki/`;
+it never edits the source files. Topic pages are generated and may be replaced
+on later scans, so edit source notes to correct their content.
+You can also paste a source into **Add a source** on the Brain screen; Poseidon
+saves it under `raw/` and scans it immediately.
+With the existing allowlisted Telegram bot configured, use `/brain add Title | source text`
+to file a note, `/brain ask question` to query it, `/brain scan` to process files,
+or `/brain lint` to check its health. Telegram message IDs prevent duplicate
+source files if delivery is retried.
+The Brain screen shows the source-to-topic graph after scanning. Obsidian's
+Graph view also displays links in the generated wiki pages.
+Use **Ask your Brain** to get an answer based on matching source-backed topic
+entries; the answer includes the supporting source paths and quotes. If no
+evidence matches, Poseidon says so. **Check health** reports changed or missing
+sources, missing topic pages, missing quotes, and orphan topics. When several
+sources feed one topic, it also asks the configured model for possible
+contradictions. Review those suggestions before treating them as facts.
+`log.md` records scans, queries, and health checks without copying question
+text or source content into the log.
+
+Brain ingestion accepts up to 100 files per scan and 24,000 characters per file
+in this first slice. It does not yet parse PDFs. Retrieval currently matches
+words in topic titles, summaries, and evidence quotes; it is not yet vector
+RAG. Source hashes prevent unchanged notes from being processed twice and
+exclude stale entries from answers until rescanned.
+Brain model operations only use a local model by default. To explicitly send
+raw vault text or retrieved excerpts to the configured remote provider, set
+`POSEIDON_BRAIN_ALLOW_REMOTE_MODEL=true` in `.env` and restart. A local Ollama
+endpoint can be selected through the existing model settings.
+
 ## Configuration
 
 | Variable | Purpose |
@@ -140,6 +181,7 @@ backend/
   app/
     agents/          Agent definitions, routing, and model providers
     api/             Operator HTTP routes
+    brain/           Local source ingestion and topic wiki
     channels/        Telegram transport and delivery
     memory/          Retrieval, storage, and consolidation
     runtime/         Conversation graph, checkpoints, and approvals
