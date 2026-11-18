@@ -5,6 +5,7 @@ import RightPanel from './components/RightPanel/RightPanel';
 import AgentView from './components/AgentView/AgentView';
 import Gateway from './pages/Gateway/Gateway';
 import Settings from './pages/Settings/Settings';
+import Brain from './pages/Brain/Brain';
 import { ChatProvider, useChat } from './context/ChatContext';
 import { HealthProvider } from './context/HealthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -13,7 +14,9 @@ import ChatDock from './components/ChatDock/ChatDock';
 import './App.css';
 
 function AppLayout() {
-  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches
+  );
   const [rightPanelWidth, setRightPanelWidth] = useState(380);
   const [isResizingRight, setIsResizingRight] = useState(false);
   const [sidebarMode, setSidebarMode] = useState('chat'); // 'chat' | 'agents'
@@ -75,13 +78,14 @@ function AppLayout() {
             <Route path="/" element={sidebarMode === 'agents' ? <AgentView /> : <ChatDock />} />
             <Route path="/gateway" element={<Gateway />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/brain" element={<Brain />} />
           </Routes>
         </main>
       </div>
 
       {/* 3. Right Inspector Panel */}
       <RightPanel
-        isCollapsed={isRightCollapsed}
+        isCollapsed={isRightCollapsed || sidebarMode === 'agents'}
         onToggleCollapse={handleToggleRight}
         width={rightPanelWidth}
         onMouseDownResize={handleMouseDownResize}

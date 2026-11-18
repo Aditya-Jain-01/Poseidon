@@ -13,7 +13,8 @@ import {
   Sun,
   Moon,
   MessageSquare,
-  Bot
+  Bot,
+  BrainCircuit
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -22,7 +23,7 @@ import lightLogo from '../../assets/light.png';
 import darkLogo from '../../assets/dark.png';
 import './LeftSidebar.css';
 
-const AVATAR_COLORS = ['#2F81F7', '#38BDF8', '#0284C7', '#1D4ED8', '#0EA5E9', '#06B6D4'];
+const AVATAR_COLORS = ['#507d73', '#7a8665', '#667b85', '#866f65', '#6c7688', '#567f82'];
 
 /**
  * Format timestamp into compact short indicator like "11h", "12h", "2d"
@@ -118,18 +119,18 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onMode
     <aside className={`left-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       {/* Header / Brand */}
       <div className="sidebar-header">
-        <div className="brand-wrapper" onClick={() => navigate('/')} title="Go to Chat" style={{ cursor: 'pointer' }}>
+        <button type="button" className="brand-wrapper" onClick={() => navigate('/')} title="Go to Chat">
           <div className="brand-logo" aria-hidden="true">
             <img 
               src={logoSrc} 
-              alt="Poseidon Logo" 
+              alt=""
               className="brand-logo-img" 
             />
           </div>
           {!isCollapsed && (
             <span className="brand-title">Poseidon</span>
           )}
-        </div>
+        </button>
 
         <button 
           className="sidebar-toggle-btn"
@@ -147,14 +148,16 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onMode
           <div className="mode-toggle-pill">
             <button
               className={`mode-toggle-btn ${sidebarMode === 'chat' ? 'active' : ''}`}
-              onClick={() => onModeChange('chat')}
+              onClick={() => { onModeChange('chat'); navigate('/'); }}
+              aria-pressed={sidebarMode === 'chat'}
             >
               <MessageSquare size={14} />
               <span>Chat</span>
             </button>
             <button
               className={`mode-toggle-btn ${sidebarMode === 'agents' ? 'active' : ''}`}
-              onClick={() => onModeChange('agents')}
+              onClick={() => { onModeChange('agents'); navigate('/'); }}
+              aria-pressed={sidebarMode === 'agents'}
             >
               <Bot size={14} />
               <span>Agents</span>
@@ -366,6 +369,10 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onMode
 
       {/* Footer */}
       <div className="sidebar-footer">
+        <NavLink to="/brain" className={({ isActive }) => `footer-link ${isActive ? 'active' : ''}`} title="Brain">
+          <BrainCircuit size={16} />
+          {!isCollapsed && <span>Brain</span>}
+        </NavLink>
         <NavLink to="/gateway" className={({ isActive }) => `footer-link ${isActive ? 'active' : ''}`} title="Gateway & API">
           <Globe size={16} />
           {!isCollapsed && <span>Gateway</span>}
