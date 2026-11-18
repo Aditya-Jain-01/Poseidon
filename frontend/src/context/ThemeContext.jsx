@@ -5,12 +5,17 @@ const ThemeContext = createContext();
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     try {
+      if (localStorage.getItem('poseidon_theme_version') !== '3') {
+        localStorage.setItem('poseidon_theme_version', '3');
+        localStorage.setItem('poseidon_theme', 'light');
+        return 'light';
+      }
       const saved = localStorage.getItem('poseidon_theme');
       if (saved === 'light' || saved === 'dark') return saved;
     } catch {
       // Fallback
     }
-    return 'dark';
+    return 'light';
   });
 
   useEffect(() => {

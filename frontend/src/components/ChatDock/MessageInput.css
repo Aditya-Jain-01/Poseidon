@@ -8,7 +8,7 @@
 }
 
 .input-container.is-hero {
-  max-width: 580px;
+  max-width: 720px;
 }
 
 /* ── The Pill ── */
@@ -16,17 +16,17 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 8px 8px 8px 12px;
+  padding: 10px 10px 10px 14px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(10, 13, 16, .08);
   transition: border-color var(--ease-fast), box-shadow var(--ease-fast);
 }
 
 .input-pill:focus-within {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring), 0 12px 32px rgba(10, 13, 16, .08);
 }
 
 /* Plus Button */
@@ -36,7 +36,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 8px;
   background: var(--bg-elevated);
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -86,7 +86,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 8px;
   background: var(--bg-elevated);
   color: var(--text-tertiary);
   flex-shrink: 0;
@@ -94,8 +94,8 @@
 }
 
 .input-send-btn.active {
-  background: var(--text-display);
-  color: var(--bg-canvas);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .input-send-btn.active:hover {

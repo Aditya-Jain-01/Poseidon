@@ -5,15 +5,9 @@ import { useChat } from '../../context/ChatContext';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
+import PixelField from './PixelField';
 import TrajectoryView from '../TrajectoryView/TrajectoryView';
 import './ChatDock.css';
-
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 export function ChatDock() {
   const navigate = useNavigate();
@@ -32,7 +26,6 @@ export function ChatDock() {
 
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'trajectory'
 
-  const greeting = getGreeting();
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
 
@@ -67,10 +60,12 @@ export function ChatDock() {
 
   return (
     <div className={`chat-canvas ${isEmpty && activeView === 'chat' ? 'is-empty-hero' : ''}`}>
+      {isEmpty && activeView === 'chat' && <PixelField />}
       {/* Minimal Top Bar */}
       {!isEmpty && (
         <div className="chat-top-bar">
           <div className="top-bar-left">
+            <span className="top-bar-title">{sessionTitle}</span>
             {messages.length > 0 && (
               <div className="view-switcher">
                 <button
@@ -90,8 +85,6 @@ export function ChatDock() {
               </div>
             )}
           </div>
-
-          <span className="top-bar-title">{sessionTitle}</span>
 
           <div className="top-bar-right">
             <button
@@ -122,8 +115,12 @@ export function ChatDock() {
       ) : isEmpty ? (
         /* Clean Empty State Hero */
         <div className="chat-hero-container animate-fade-in">
-          <h1 className="hero-greeting">{greeting}</h1>
-          <p className="hero-subtitle">How can I help you today?</p>
+          <div className="hero-intro">
+            <div className="hero-intro-copy">
+              <h1 className="hero-greeting">What are you working on?</h1>
+              <p className="hero-subtitle">Start a conversation, or open a part of your workspace.</p>
+            </div>
+          </div>
 
           <div className="hero-actions">
             <button type="button" className="hero-action-card" onClick={() => navigate('/settings?tab=memory')}>

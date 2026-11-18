@@ -1,35 +1,37 @@
-/* ── Poseidon Grok-Inspired Ocean Design System ── */
+/* Poseidon workbench color and type tokens */
 
 :root,
 [data-theme="dark"] {
   /* ── Semantic Color Contract (Dark) ── */
-  --color-canvas: #0A0C0F;
-  --color-sidebar: #0D0F12;
-  --color-surface-1: #111419;
-  --color-surface-2: #171B21;
-  --color-surface-3: #20252C;
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.15);
-  --color-text-primary: #F3F5F7;
-  --color-text-secondary: #A5ACB7;
-  --color-text-tertiary: #6F7885;
-  --color-accent: #2F81F7;
-  --color-accent-hover: #58A6FF;
-  --color-accent-strong: #1F6FEB;
-  --color-accent-soft: rgba(47, 129, 247, 0.14);
-  --color-accent-border: rgba(88, 166, 255, 0.38);
-  --color-ocean-cyan: #38BDF8;
+  --color-canvas: #101114;
+  --color-sidebar: #151619;
+  --color-surface-1: #1c1e22;
+  --color-surface-2: #272a30;
+  --color-surface-3: #353941;
+  --color-border-subtle: rgba(244, 247, 250, 0.12);
+  --color-border-strong: rgba(244, 247, 250, 0.25);
+  --color-text-primary: #f7f7f4;
+  --color-text-secondary: #d1d2d0;
+  --color-text-tertiary: #aeb1b5;
+  --color-accent: #74c9ff;
+  --color-on-accent: #0c1b25;
+  --color-accent-hover: #a8ddff;
+  --color-accent-strong: #45b5f8;
+  --color-accent-soft: rgba(116, 201, 255, 0.16);
+  --color-accent-border: rgba(116, 201, 255, 0.36);
+  --color-ocean-cyan: #74c9ff;
+  --color-pixel-blue: #08a4fb;
   --color-success: #3DDC84;
   --color-warning: #F59E0B;
   --color-danger: #F85149;
-  --focus-ring: 0 0 0 3px rgba(47, 129, 247, 0.28);
+  --focus-ring: 0 0 0 3px rgba(116, 201, 255, 0.38);
 
   /* Conversational Chat Bubbles */
-  --bubble-user-bg: #eceae3;
-  --bubble-user-text: #141414;
+  --bubble-user-bg: #272e35;
+  --bubble-user-text: #f7f7f4;
   --bubble-user-border: transparent;
-  --bubble-ai-bg: #171B21;
-  --bubble-ai-text: #F3F5F7;
+  --bubble-ai-bg: #1c1e22;
+  --bubble-ai-text: #f7f7f4;
   --bubble-ai-border: rgba(255, 255, 255, 0.08);
 
   /* Semantic Compatibility Aliases */
@@ -55,7 +57,7 @@
   --text-display: #ffffff;
   --text-muted: var(--color-text-secondary);
 
-  /* Poseidon Ocean Accent */
+  /* Poseidon blue accent */
   --accent: var(--color-accent);
   --accent-hover: var(--color-accent-hover);
   --accent-strong: var(--color-accent-strong);
@@ -65,13 +67,13 @@
   --accent-red: var(--color-danger);
   --accent-red-glow: transparent;
 
-  /* Ocean Avatar Palette */
-  --avatar-teal: #06B6D4;
-  --avatar-orange: #0284C7;
-  --avatar-purple: #3B82F6;
-  --avatar-blue: #2F81F7;
-  --avatar-red: #1D4ED8;
-  --avatar-pink: #38BDF8;
+  /* Avatar palette */
+  --avatar-teal: #507d73;
+  --avatar-orange: #866f65;
+  --avatar-purple: #6c7688;
+  --avatar-blue: #667b85;
+  --avatar-red: #8b6e69;
+  --avatar-pink: #7a8665;
 
   /* Status Colors */
   --success: var(--color-success);
@@ -113,33 +115,35 @@
 
 [data-theme="light"] {
   /* ── Semantic Color Contract (Light) ── */
-  --color-canvas: #F6F8FA;
-  --color-sidebar: #FFFFFF;
-  --color-surface-1: #FFFFFF;
-  --color-surface-2: #F0F3F6;
-  --color-surface-3: #E7EBF0;
-  --color-border-subtle: rgba(15, 23, 42, 0.10);
-  --color-border-strong: rgba(15, 23, 42, 0.18);
-  --color-text-primary: #111827;
-  --color-text-secondary: #4B5563;
-  --color-text-tertiary: #7B8491;
-  --color-accent: #0969DA;
-  --color-accent-hover: #0550AE;
-  --color-accent-strong: #0349B4;
-  --color-accent-soft: rgba(9, 105, 218, 0.10);
-  --color-accent-border: rgba(9, 105, 218, 0.28);
-  --color-ocean-cyan: #0284C7;
+  --color-canvas: #ffffff;
+  --color-sidebar: #f9f9f8;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f3f4f5;
+  --color-surface-3: #e9ebed;
+  --color-border-subtle: rgba(10, 13, 16, 0.12);
+  --color-border-strong: rgba(10, 13, 16, 0.24);
+  --color-text-primary: #0b0d0f;
+  --color-text-secondary: #34383c;
+  --color-text-tertiary: #555a60;
+  --color-accent: #006dbd;
+  --color-on-accent: #ffffff;
+  --color-accent-hover: #00579a;
+  --color-accent-strong: #004c88;
+  --color-accent-soft: rgba(0, 109, 189, 0.10);
+  --color-accent-border: rgba(0, 109, 189, 0.27);
+  --color-ocean-cyan: #006dbd;
+  --color-pixel-blue: #08a4fb;
   --color-success: #15803D;
   --color-warning: #B45309;
   --color-danger: #CF222E;
-  --focus-ring: 0 0 0 3px rgba(9, 105, 218, 0.28);
+  --focus-ring: 0 0 0 3px rgba(0, 109, 189, 0.25);
 
   /* Conversational Chat Bubbles (Light) */
-  --bubble-user-bg: #1e1e1e;
-  --bubble-user-text: #ffffff;
+  --bubble-user-bg: #e8f5fe;
+  --bubble-user-text: #0b0d0f;
   --bubble-user-border: transparent;
-  --bubble-ai-bg: #F0F3F6;
-  --bubble-ai-text: #111827;
+  --bubble-ai-bg: #ffffff;
+  --bubble-ai-text: #0b0d0f;
   --bubble-ai-border: rgba(15, 23, 42, 0.10);
 
   /* Semantic Compatibility Aliases (Light) */
@@ -148,10 +152,10 @@
   --bg-surface: var(--color-surface-1);
   --bg-panel: var(--color-surface-1);
   --bg-elevated: var(--color-surface-2);
-  --bg-input: #FFFFFF;
+  --bg-input: #ffffff;
   --bg-hover: var(--color-surface-3);
   --bg-active: var(--color-accent-soft);
-  --bg-overlay: rgba(246, 248, 250, 0.9);
+  --bg-overlay: rgba(10, 13, 16, 0.45);
 
   --border-subtle: var(--color-border-subtle);
   --border-default: var(--color-border-subtle);
@@ -162,7 +166,7 @@
   --text-secondary: var(--color-text-secondary);
   --text-tertiary: var(--color-text-tertiary);
   --text-disabled: var(--color-text-tertiary);
-  --text-display: #000000;
+  --text-display: #0b0d0f;
   --text-muted: var(--color-text-secondary);
 
   --accent: var(--color-accent);
@@ -174,12 +178,12 @@
   --accent-red: var(--color-danger);
   --accent-red-glow: transparent;
 
-  --avatar-teal: #0284C7;
-  --avatar-orange: #0369A1;
-  --avatar-purple: #2563EB;
-  --avatar-blue: #0969DA;
-  --avatar-red: #1E40AF;
-  --avatar-pink: #0284C7;
+  --avatar-teal: #507d73;
+  --avatar-orange: #866f65;
+  --avatar-purple: #6c7688;
+  --avatar-blue: #667b85;
+  --avatar-red: #8b6e69;
+  --avatar-pink: #7a8665;
 
   --success: var(--color-success);
   --success-subtle: rgba(21, 128, 61, 0.08);
@@ -217,7 +221,7 @@
 }
 
 :root {
-  /* Border Radii — Consistent with Grok and plan */
+  /* Border radii */
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -234,13 +238,13 @@
   --sidebar-collapsed-width: 64px;
   --inspector-width: 380px;
 
-  /* Typography — Inter + JetBrains Mono */
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-heading: 'Inter', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  /* Typography: local system faces for offline use */
+  --font-display: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --font-body: 'Segoe UI Variable', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --font-dot: 'Inter', sans-serif;
+  --font-dot: 'Segoe UI Variable', 'Segoe UI', sans-serif;
 
   /* Smooth Transitions */
   --ease-fast: 150ms ease-out;
