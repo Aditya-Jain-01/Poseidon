@@ -54,4 +54,9 @@ memory-store/memory/*.md
 !memory-store/memory/*.example
 memory-store/skills/*.SKILL.md
 !memory-store/skills/schedule_meeting.SKILL.md
+memory-store/brain/
+
+# Local UI review captures
+.impeccable/review/
+.npm-cache/
 
