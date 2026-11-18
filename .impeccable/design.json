@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T00:00:00Z",
+  "title": "Design System: Poseidon",
+  "extensions": {
+    "colorMeta": {
+      "white-canvas": { "role": "background", "displayName": "White canvas" },
+      "ink": { "role": "text", "displayName": "Ink black" },
+      "blue-action": { "role": "primary", "displayName": "Action blue" },
+      "pixel-blue": { "role": "decorative", "displayName": "Pixel blue" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Instrument Serif Italic", "purpose": "Empty chat welcome heading." },
+      "body": { "displayName": "Body", "purpose": "Long-session reading and controls." }
+    },
+    "shadows": [
+      { "name": "composer", "value": "0 12px 32px rgba(10, 13, 16, .08)", "purpose": "Separates the main chat input from the canvas." }
+    ],
+    "motion": [
+      { "name": "pixel-unveil", "value": "850ms cubic-bezier(.16, 1, .3, 1)", "purpose": "Pixel border reveal; disabled for reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "760px" },
+      { "name": "small-mobile", "value": "490px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action on a white surface.",
+      "html": "<button class=\"poseidon-primary\">Ask Brain</button>",
+      "css": ".poseidon-primary { background: #006dbd; color: #ffffff; border: 0; border-radius: 8px; padding: 10px 17px; font: 600 14px 'Segoe UI Variable', 'Segoe UI', sans-serif; } .poseidon-primary:focus-visible { outline: 3px solid #74c9ff; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The editorial workbench",
+    "overview": "Expressive typography and pixel texture welcome the user while task surfaces remain readable and direct.",
+    "keyCharacteristics": ["white space", "ink-black type", "oversized italic serif", "electric-blue pixel frame", "clear operational states"],
+    "rules": [{ "name": "Task clarity", "body": "Let content and controls lead after the welcome moment.", "section": "components" }],
+    "dos": ["Use real agent and system data.", "Honor reduced motion."],
+    "donts": ["Invent dashboard metrics.", "Place pixel artwork behind dense reading text."]
+  }
+}
