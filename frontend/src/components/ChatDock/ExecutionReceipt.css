@@ -24,6 +24,10 @@
 
 .execution-receipt-bar {
   display: flex;
+  width: 100%;
+  border: 0;
+  color: inherit;
+  text-align: left;
   align-items: center;
   justify-content: space-between;
   padding: 0.45rem 0.75rem;
@@ -168,3 +172,16 @@
   margin: 0;
   line-height: 1.45;
 }
+.receipt-capped-output pre { margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.receipt-capped-output button {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  text-align: left;
+  font: inherit;
+}
+.receipt-capped-output button:hover { color: var(--text-primary); }

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowUp, 
+  ChevronDown,
   Plus, 
   Terminal, 
   Brain, 
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import './MessageInput.css';
+import { useHealth } from '../../context/HealthContext';
 
 const SLASH_COMMANDS = [
   { cmd: '/memory', label: 'Inspect Memory', desc: 'View semantic facts and episodic state', icon: Brain },
@@ -26,11 +28,15 @@ const SLASH_COMMANDS = [
  */
 export function MessageInput({ onSend, onStop, disabled = false, isHero = false }) {
   const navigate = useNavigate();
+  const { modelName } = useHealth();
   const { clearChat, openOverview, setError } = useChat();
 
   const [value, setValue] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
+  const [menuMaxHeight, setMenuMaxHeight] = useState(320);
   const textareaRef = useRef(null);
+  const recentlyComposedRef = useRef(false);
+  const compositionTimerRef = useRef(null);
 
   const isSlashMode = value.startsWith('/') && !value.includes(' ');
   const matchingCommands = isSlashMode
@@ -44,6 +50,22 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [value]);
+
+  useEffect(() => {
+    if (!isSlashMode) return;
+    const measure = () => setMenuMaxHeight(Math.max(100, Math.min(320, (textareaRef.current?.getBoundingClientRect().top || 320) - 16)));
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [isSlashMode]);
+
+  useEffect(() => () => window.clearTimeout(compositionTimerRef.current), []);
+
+  const handleCompositionEnd = () => {
+    recentlyComposedRef.current = true;
+    window.clearTimeout(compositionTimerRef.current);
+    compositionTimerRef.current = window.setTimeout(() => { recentlyComposedRef.current = false; }, 10);
+  };
 
   const executeCommand = (cmdObj) => {
     setValue('');
@@ -129,6 +151,7 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
   };
 
   const handleKeyDown = (e) => {
+    if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229 || recentlyComposedRef.current) return;
     if (isSlashMode && matchingCommands.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -162,7 +185,7 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
     <div className={`input-container ${isHero ? 'is-hero' : ''}`}>
       {/* Slash Command Overlay */}
       {isSlashMode && matchingCommands.length > 0 && (
-        <div className="slash-dropdown animate-slide-up">
+        <div className="slash-dropdown animate-slide-up" id="slash-command-list" role="listbox" style={{ maxHeight: menuMaxHeight, overflowY: 'auto' }}>
           <div className="slash-dropdown-header">
             <Terminal size={12} />
             <span>Commands</span>
@@ -174,8 +197,11 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
               return (
                 <div
                   key={item.cmd}
+                  id={`slash-command-${idx}`}
+                  role="option"
+                  aria-selected={isSelected}
                   className={`slash-item ${isSelected ? 'selected' : ''}`}
-                  onClick={() => executeCommand(item)}
+                  onMouseDown={(event) => { event.preventDefault(); executeCommand(item); }}
                   onMouseEnter={() => setSlashIndex(idx)}
                 >
                   <Icon size={16} className="slash-item-icon" />
@@ -195,9 +221,9 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
         <button
           type="button"
           className="input-plus-btn"
-          title="Attachments are not enabled yet"
-          aria-label="Attachments are not enabled yet"
-          disabled
+          title="Show available commands"
+          aria-label="Show available commands"
+          onClick={() => { setValue('/'); textareaRef.current?.focus(); }}
         >
           <Plus size={18} />
         </button>
@@ -210,11 +236,27 @@ export function MessageInput({ onSend, onStop, disabled = false, isHero = false 
             setSlashIndex(0);
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Message Poseidon..."
+          onCompositionEnd={handleCompositionEnd}
+          placeholder="Ask Poseidon anything, or use / for commands"
           disabled={disabled}
           rows={1}
           aria-label="Message input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isSlashMode && matchingCommands.length > 0}
+          aria-controls={isSlashMode && matchingCommands.length > 0 ? 'slash-command-list' : undefined}
+          aria-activedescendant={isSlashMode && matchingCommands.length > 0 ? `slash-command-${Math.min(slashIndex, matchingCommands.length - 1)}` : undefined}
         />
+
+        <button
+          type="button"
+          className="input-model-btn"
+          onClick={() => navigate('/settings?tab=models')}
+          title="Configure chat model"
+          aria-label="Configure chat model"
+        >
+          <span>{modelName || 'Model settings'}</span> <ChevronDown size={13} />
+        </button>
 
         <button
           type="button"

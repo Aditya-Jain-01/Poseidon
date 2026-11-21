@@ -1,94 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { PanelLeft, PanelRight } from 'lucide-react';
+import SettingsDialog from './pages/Settings/SettingsDialog';
 import LeftSidebar from './components/LeftSidebar/LeftSidebar';
 import RightPanel from './components/RightPanel/RightPanel';
 import AgentView from './components/AgentView/AgentView';
 import Gateway from './pages/Gateway/Gateway';
-import Settings from './pages/Settings/Settings';
 import Brain from './pages/Brain/Brain';
 import { ChatProvider, useChat } from './context/ChatContext';
 import { HealthProvider } from './context/HealthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AgentProvider } from './context/AgentContext';
 import ChatDock from './components/ChatDock/ChatDock';
+import { useWorkspaceLayout } from './layout/useWorkspaceLayout';
 import './App.css';
+import './ReferenceShell.css';
 
 function AppLayout() {
-  const [isLeftCollapsed, setIsLeftCollapsed] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches
-  );
-  const [rightPanelWidth, setRightPanelWidth] = useState(380);
-  const [isResizingRight, setIsResizingRight] = useState(false);
+  const location = useLocation();
   const [sidebarMode, setSidebarMode] = useState('chat'); // 'chat' | 'agents'
 
   const { isOverviewOpen, toggleOverview } = useChat();
-  const isRightCollapsed = !isOverviewOpen;
-
-  // Handle Drag-to-Resize Right Panel
-  useEffect(() => {
-    if (!isResizingRight) return;
-
-    const handleMouseMove = (e) => {
-      const newWidth = window.innerWidth - e.clientX;
-      const minWidth = 280;
-      const maxWidth = Math.min(850, window.innerWidth * 0.65);
-      setRightPanelWidth(Math.max(minWidth, Math.min(newWidth, maxWidth)));
-    };
-
-    const handleMouseUp = () => {
-      setIsResizingRight(false);
-      document.body.style.cursor = 'default';
-      document.body.style.userSelect = 'auto';
-    };
-
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizingRight]);
-
-  const handleMouseDownResize = (e) => {
-    e.preventDefault();
-    setIsResizingRight(true);
-  };
-
-  const handleToggleLeft = () => setIsLeftCollapsed((prev) => !prev);
+  const detailsOpen = isOverviewOpen && sidebarMode !== 'agents';
+  const { columns, sidebarCollapsed, toggleSidebar, dragging, sidebarResize, detailsResize } = useWorkspaceLayout(detailsOpen);
   const handleToggleRight = () => toggleOverview();
 
   return (
-    <div className="app-workspace-layout">
+    <div
+      className="app-workspace-layout"
+      data-dragging={dragging}
+      data-details-overlay={columns.detailsOverlay}
+      style={{ '--workspace-rail': `${columns.rail}px`, '--workspace-sidebar': `${columns.gridSidebar}px`, '--workspace-details': `${columns.gridDetails}px` }}
+    >
       {/* 1. Left Navigation Sidebar */}
       <LeftSidebar
-        isCollapsed={isLeftCollapsed}
-        onToggleCollapse={handleToggleLeft}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+        width={columns.sidebar}
+        resizeHandlers={sidebarResize}
         sidebarMode={sidebarMode}
         onModeChange={setSidebarMode}
       />
 
       {/* 2. Center Main Canvas */}
       <div className="center-workspace">
+        <header className="workspace-topbar">
+          <button type="button" className="workspace-mobile-toggle" onClick={toggleSidebar} aria-label="Toggle sidebar"><PanelLeft size={19} /></button>
+          <button type="button" className="workspace-topbar-inspector" onClick={handleToggleRight} aria-label="Toggle inspector" title="Toggle inspector"><PanelRight size={18} /></button>
+        </header>
         <main className="center-content">
           <Routes>
             <Route path="/" element={sidebarMode === 'agents' ? <AgentView /> : <ChatDock />} />
             <Route path="/gateway" element={<Gateway />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<ChatDock />} />
             <Route path="/brain" element={<Brain />} />
           </Routes>
         </main>
       </div>
 
+      {location.pathname === '/settings' && <SettingsDialog />}
       {/* 3. Right Inspector Panel */}
       <RightPanel
-        isCollapsed={isRightCollapsed || sidebarMode === 'agents'}
+        isCollapsed={!detailsOpen}
         onToggleCollapse={handleToggleRight}
-        width={rightPanelWidth}
-        onMouseDownResize={handleMouseDownResize}
+        width={columns.details}
+        resizeHandlers={detailsResize}
       />
     </div>
   );

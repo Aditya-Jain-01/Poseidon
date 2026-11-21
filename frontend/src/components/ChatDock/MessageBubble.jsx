@@ -6,9 +6,6 @@ import {
   ThumbsUp,
   ThumbsDown,
   RotateCw,
-  BrainCircuit,
-  ChevronDown,
-  ChevronRight,
   FileText
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
@@ -27,7 +24,6 @@ export function MessageBubble({ message, sessionId }) {
   const { agents } = useAgents();
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(null);
-  const [isThinkExpanded, setIsThinkExpanded] = useState(false);
 
   const isUser = message.role === 'user';
   const isError = message.isError;
@@ -108,8 +104,6 @@ export function MessageBubble({ message, sessionId }) {
     });
   });
 
-  const reasoningTokens = message.telemetry?.reasoning_tokens || null;
-
   return (
     <div className={`ai-message-row animate-slide-up ${isError ? 'is-error' : ''}`}>
       {/* Content */}
@@ -129,29 +123,6 @@ export function MessageBubble({ message, sessionId }) {
             </button>
           )}
         </div>
-
-        {/* Thinking Accordion */}
-        {reasoningTokens && (
-          <div className={`thinking-section ${isThinkExpanded ? 'is-open' : ''}`}>
-            <button
-              type="button"
-              className="thinking-toggle"
-              onClick={() => setIsThinkExpanded(!isThinkExpanded)}
-              aria-expanded={isThinkExpanded}
-            >
-              <BrainCircuit size={14} className="thinking-icon" />
-              <span>Thinking · ~{reasoningTokens} tokens</span>
-              {isThinkExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-            {isThinkExpanded && (
-              <div className="thinking-body animate-fade-in">
-                <p>
-                  Evaluated working memory context, verified sandbox boundaries, and synthesized response.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Tool Execution Receipts */}
         {executedTools.length > 0 && (

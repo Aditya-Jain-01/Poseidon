@@ -1,27 +1,20 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
-  Plus, 
   Search, 
+  SquarePen,
   Trash2, 
   Edit2, 
   Check, 
   PanelLeftClose, 
   PanelLeft,
-  Globe,
-  Settings as SettingsIcon,
-  Sun,
-  Moon,
   MessageSquare,
-  Bot,
-  BrainCircuit
+  Bot, BrainCircuit, Globe, MoreHorizontal, Settings, Moon, Sun,
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
-import { useTheme } from '../../context/ThemeContext';
 import { useAgents } from '../../context/AgentContext';
-import lightLogo from '../../assets/light.png';
-import darkLogo from '../../assets/dark.png';
 import './LeftSidebar.css';
+import { useTheme } from '../../context/ThemeContext';
 
 const AVATAR_COLORS = ['#507d73', '#7a8665', '#667b85', '#866f65', '#6c7688', '#567f82'];
 
@@ -47,8 +40,10 @@ function getSessionColor(index) {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
 }
 
-export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onModeChange }) {
+export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onModeChange, width, resizeHandlers }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
   const {
     sessions,
     activeSessionId,
@@ -59,11 +54,10 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onMode
   } = useChat();
 
   const { agents, activeAgentId, setActiveAgentId, healthStatus } = useAgents();
-  const { theme, toggleTheme } = useTheme();
-  const logoSrc = theme === 'light' ? lightLogo : darkLogo;
 
   const handleCreateNewSession = () => {
     createNewSession();
+    onModeChange('chat');
     navigate('/');
   };
 
@@ -116,86 +110,46 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onMode
   const hiddenCount = filteredSessions.length - visibleSessions.length;
 
   return (
-    <aside className={`left-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+    <aside className={`left-sidebar ${isCollapsed ? 'collapsed' : ''}`} style={{ width }}>
       {/* Header / Brand */}
       <div className="sidebar-header">
-        <button type="button" className="brand-wrapper" onClick={() => navigate('/')} title="Go to Chat">
-          <div className="brand-logo" aria-hidden="true">
-            <img 
-              src={logoSrc} 
-              alt=""
-              className="brand-logo-img" 
-            />
-          </div>
+        <button type="button" className="brand-wrapper" onClick={() => { onModeChange('chat'); navigate('/'); }} title="Go to Chat">
           {!isCollapsed && (
             <span className="brand-title">Poseidon</span>
           )}
         </button>
 
-        <button 
-          className="sidebar-toggle-btn"
-          onClick={onToggleCollapse}
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+        <div className="sidebar-header-actions">
+          {!isCollapsed && <button className="sidebar-toggle-btn" onClick={() => setIsSearchOpen(!isSearchOpen)} title="Search conversations" aria-label="Search conversations"><Search size={17} /></button>}
+          <button
+            className="sidebar-toggle-btn"
+            onClick={onToggleCollapse}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </div>
       </div>
 
-      {/* Mode Toggle — Chat / Agents */}
-      {!isCollapsed && (
-        <div className="mode-toggle-container">
-          <div className="mode-toggle-pill">
-            <button
-              className={`mode-toggle-btn ${sidebarMode === 'chat' ? 'active' : ''}`}
-              onClick={() => { onModeChange('chat'); navigate('/'); }}
-              aria-pressed={sidebarMode === 'chat'}
-            >
-              <MessageSquare size={14} />
-              <span>Chat</span>
-            </button>
-            <button
-              className={`mode-toggle-btn ${sidebarMode === 'agents' ? 'active' : ''}`}
-              onClick={() => { onModeChange('agents'); navigate('/'); }}
-              aria-pressed={sidebarMode === 'agents'}
-            >
-              <Bot size={14} />
-              <span>Agents</span>
-            </button>
-            <div className={`mode-toggle-slider ${sidebarMode === 'agents' ? 'right' : 'left'}`} />
-          </div>
-        </div>
-      )}
-
-      {/* Mode Content */}
+      <div className="sidebar-action-container">
+        <button className="new-session-btn" onClick={handleCreateNewSession} title="New session"><SquarePen size={17} />{!isCollapsed && <span>New Session</span>}</button>
+      </div>
+      <nav className="sidebar-primary-nav" aria-label="Workspace navigation">
+        {[
+          { label: 'Agents', icon: Bot, path: '/', mode: 'agents' },
+          { label: 'Brain', icon: BrainCircuit, path: '/brain', mode: 'chat' },
+          { label: 'Gateway', icon: Globe, path: '/gateway', mode: 'chat' },
+        ].map(({ label, icon: Icon, path, mode }) => <button key={label} title={label} className={location.pathname === path && sidebarMode === mode ? 'active' : ''} onClick={() => { onModeChange(mode); navigate(path); }}><Icon size={18} />{!isCollapsed && <span>{label}</span>}</button>)}
+      </nav>
       <div className="sidebar-body-scrollable">
         {sidebarMode === 'chat' ? (
-          /* ─── Chat Mode ─── */
           <>
-            {/* New Session Button */}
-            <div className="sidebar-action-container">
-              <button
-                className="new-session-btn"
-                onClick={handleCreateNewSession}
-                title="Start New Session"
-              >
-                <Plus size={16} />
-                {!isCollapsed && <span>New Chat</span>}
-              </button>
-            </div>
-
             {!isCollapsed && (
               <>
                 {/* Search */}
                 <div className="session-section-header">
-                  <span className="section-title">Recent</span>
-                  <button
-                    className={`section-action-btn ${isSearchOpen ? 'active' : ''}`}
-                    onClick={() => setIsSearchOpen(!isSearchOpen)}
-                    title="Search"
-                  >
-                    <Search size={14} />
-                  </button>
+                  <span className="section-title">Conversations</span>
                 </div>
 
                 {isSearchOpen && (
@@ -366,33 +320,15 @@ export function LeftSidebar({ isCollapsed, onToggleCollapse, sidebarMode, onMode
           </>
         )}
       </div>
+      <details className="sidebar-more">
+        <summary title="More"><MoreHorizontal size={18} />{!isCollapsed && <span>More</span>}</summary>
+        <div className="sidebar-more-menu">
+          <button onClick={(event) => { event.currentTarget.closest('details').open = false; navigate('/settings'); }}><Settings size={17} />Settings</button>
+          <button onClick={toggleTheme}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}{theme === 'dark' ? 'Light appearance' : 'Dark appearance'}</button>
+        </div>
+      </details>
+      {!isCollapsed && <div className="left-sidebar-resize-handle" role="separator" tabIndex={0} aria-label="Resize conversations sidebar" aria-orientation="vertical" aria-valuenow={width} aria-valuemin={220} aria-valuemax={360} {...resizeHandlers} />}
 
-      {/* Footer */}
-      <div className="sidebar-footer">
-        <NavLink to="/brain" className={({ isActive }) => `footer-link ${isActive ? 'active' : ''}`} title="Brain">
-          <BrainCircuit size={16} />
-          {!isCollapsed && <span>Brain</span>}
-        </NavLink>
-        <NavLink to="/gateway" className={({ isActive }) => `footer-link ${isActive ? 'active' : ''}`} title="Gateway & API">
-          <Globe size={16} />
-          {!isCollapsed && <span>Gateway</span>}
-        </NavLink>
-
-        <NavLink to="/settings" className={({ isActive }) => `footer-link ${isActive ? 'active' : ''}`} title="Settings">
-          <SettingsIcon size={16} />
-          {!isCollapsed && <span>Settings</span>}
-        </NavLink>
-
-        <button 
-          className="footer-link"
-          onClick={toggleTheme}
-          title={theme === 'dark' ? "Light mode" : "Dark mode"}
-          aria-label="Toggle theme"
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          {!isCollapsed && <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>}
-        </button>
-      </div>
     </aside>
   );
 }

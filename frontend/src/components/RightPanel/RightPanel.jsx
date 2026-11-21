@@ -15,7 +15,7 @@ import { useHealth } from '../../context/HealthContext';
 import ArchitectureMap from '../ArchitectureMap/ArchitectureMap';
 import './RightPanel.css';
 
-export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownResize }) {
+export function RightPanel({ isCollapsed, onToggleCollapse, width, resizeHandlers }) {
   const { messages, isLoading, selectedTurn, overviewTab, setOverviewTab } = useChat();
   const { isConnected, modelName } = useHealth();
 
@@ -96,7 +96,14 @@ export function RightPanel({ isCollapsed, onToggleCollapse, width, onMouseDownRe
       {/* Resizable Drag Handle / Slider */}
       <div 
         className="right-panel-resize-handle" 
-        onMouseDown={onMouseDownResize}
+        role="separator"
+        tabIndex={0}
+        aria-label="Resize inspector"
+        aria-orientation="vertical"
+        aria-valuenow={width}
+        aria-valuemin={280}
+        aria-valuemax={850}
+        {...resizeHandlers}
         title="Drag to resize Inspector window"
       />
 

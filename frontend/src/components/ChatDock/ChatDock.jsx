@@ -1,16 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Download, PanelRight, PanelRightClose, Brain, Cpu, FileText, RotateCw } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ArrowDown, Download, PanelRight, PanelRightClose } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 import TypingIndicator from './TypingIndicator';
-import PixelField from './PixelField';
 import TrajectoryView from '../TrajectoryView/TrajectoryView';
+import { useConversationScroll } from './useConversationScroll';
 import './ChatDock.css';
+import './ChatReference.css';
 
 export function ChatDock() {
-  const navigate = useNavigate();
   const {
     sessions,
     messages,
@@ -20,24 +19,15 @@ export function ChatDock() {
     activeSessionId,
     isOverviewOpen,
     toggleOverview,
-    openOverview,
-    clearChat,
   } = useChat();
 
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'trajectory'
 
-  const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
+  const { isFollowing, onScroll, jumpToLatest } = useConversationScroll(messageListRef, activeSessionId, messages, isLoading, activeView);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const sessionTitle = activeSession?.title || 'New Chat';
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (activeView === 'chat' && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, isLoading, activeView]);
 
   const isEmpty = messages.length === 0;
 
@@ -59,8 +49,7 @@ export function ChatDock() {
   };
 
   return (
-    <div className={`chat-canvas ${isEmpty && activeView === 'chat' ? 'is-empty-hero' : ''}`}>
-      {isEmpty && activeView === 'chat' && <PixelField />}
+    <div className={`chat-canvas ${isEmpty && activeView === 'chat' ? 'is-start' : ''}`}>
       {/* Minimal Top Bar */}
       {!isEmpty && (
         <div className="chat-top-bar">
@@ -113,42 +102,18 @@ export function ChatDock() {
           <TrajectoryView messages={messages} sessionTitle={sessionTitle} />
         </div>
       ) : isEmpty ? (
-        /* Clean Empty State Hero */
-        <div className="chat-hero-container animate-fade-in">
-          <div className="hero-intro">
-            <div className="hero-intro-copy">
-              <h1 className="hero-greeting">What are you working on?</h1>
-              <p className="hero-subtitle">Start a conversation, or open a part of your workspace.</p>
-            </div>
-          </div>
-
-          <div className="hero-actions">
-            <button type="button" className="hero-action-card" onClick={() => navigate('/settings?tab=memory')}>
-              <Brain size={20} />
-              <span>Inspect Memory</span>
-            </button>
-            <button type="button" className="hero-action-card" onClick={() => openOverview('telemetry')}>
-              <Cpu size={20} />
-              <span>System Health</span>
-            </button>
-            <button type="button" className="hero-action-card" onClick={() => navigate('/settings?tab=memory')}>
-              <FileText size={20} />
-              <span>View Skills</span>
-            </button>
-            <button type="button" className="hero-action-card" onClick={clearChat}>
-              <RotateCw size={20} />
-              <span>Fresh Session</span>
-            </button>
-          </div>
-
-          <div className="hero-input-wrapper">
+        /* Focused chat start screen */
+        <div className="chat-start">
+          <h1>What’s on your mind today?</h1>
+          <div className="chat-start-input">
             <MessageInput onSend={sendMessage} onStop={stopGeneration} disabled={isLoading} isHero={true} />
           </div>
+          <p className="chat-start-note">Poseidon can make mistakes. Verify important information.</p>
         </div>
       ) : (
         /* Active Chat Message Stream */
         <>
-          <div className="chat-canvas-messages" ref={messageListRef}>
+          <div className="chat-canvas-messages" ref={messageListRef} onScroll={onScroll}>
             <div className="messages-column">
               {messages.map((msg) => (
                 <MessageBubble key={msg.id} message={msg} sessionId={activeSessionId} />
@@ -156,9 +121,10 @@ export function ChatDock() {
 
               {isLoading && <TypingIndicator />}
 
-              <div ref={messagesEndRef} />
             </div>
           </div>
+
+          {!isFollowing && <button type="button" className="chat-jump-latest" onClick={jumpToLatest}><ArrowDown size={15} /> Latest</button>}
 
           <div className="chat-canvas-input-wrapper">
             <MessageInput onSend={sendMessage} onStop={stopGeneration} disabled={isLoading} isHero={false} />

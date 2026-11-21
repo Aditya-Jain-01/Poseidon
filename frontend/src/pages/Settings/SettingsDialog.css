@@ -1,0 +1,23 @@
+.settings-dialog { width: min(1000px, calc(100vw - 48px)); height: min(870px, calc(100dvh - 80px)); max-width: none; max-height: none; padding: 0; margin: auto; border: 1px solid var(--border-subtle); border-radius: 28px; background: var(--color-surface-1); color: var(--text-primary); box-shadow: 0 24px 80px #0003; }
+.settings-dialog::backdrop { background: #0007; }
+.settings-dialog-inner { position: relative; height: 100%; }
+.settings-dialog-close { position: absolute; top: 22px; right: 22px; z-index: 2; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; color: var(--text-secondary); }
+.settings-dialog-close:hover { background: var(--color-surface-2); }
+.settings-dialog .settings-page-root { display: grid; grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: 58px minmax(0, 1fr); gap: 12px 28px; padding: 24px 30px 24px 16px; overflow: hidden; background: var(--color-surface-1); }
+.settings-dialog .settings-page-header { grid-column: 1 / -1; padding: 8px 48px 0 14px; border: 0; }
+.settings-dialog .settings-title { font-size: 20px; letter-spacing: -.02em; }
+.settings-dialog .settings-subtitle { display: none; }
+.settings-dialog .settings-tabs-row { display: flex; flex-direction: column; flex-wrap: nowrap; align-self: start; gap: 5px; border: 0; }
+.settings-dialog .settings-tab-btn { min-height: 48px; padding: 12px 14px; font-size: 14px; border: 0; border-radius: 12px; }
+.settings-dialog .settings-tab-btn.active { background: var(--color-surface-2); }
+.settings-dialog .settings-tab-content { overflow-y: auto; min-height: 0; padding: 8px 6px 24px 0; }
+.settings-dialog .runtime-summary-grid { grid-template-columns: 1fr; }
+.settings-dialog .runtime-summary-item { border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+.settings-dialog .runtime-summary-item:last-child { border-bottom: 0; }
+@media (max-width: 700px) {
+ .settings-dialog { width: calc(100vw - 20px); height: calc(100dvh - 24px); border-radius: 20px; }
+ .settings-dialog .settings-page-root { grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px auto minmax(0, 1fr); padding: 18px 14px; gap: 10px; }
+ .settings-dialog .settings-tabs-row { flex-direction: row; overflow-x: auto; }
+ .settings-dialog .settings-tab-btn { flex: 0 0 auto; font-size: 12px; padding: 10px; }
+ .settings-dialog-close { top: 16px; right: 14px; }
+}
