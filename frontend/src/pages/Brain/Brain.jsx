@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BrainCircuit, FileText, RefreshCw, Link2, Search, Stethoscope, Plus } from 'lucide-react';
 import { fetchBrainStatus, fetchBrainNodes, fetchBrainGraph, fetchBrainNode, syncBrain, queryBrain, lintBrain, addBrainSource } from '../../api/brain';
-import BrainGraph from './BrainGraph';
+import { lazy, Suspense } from 'react';
+const BrainGraph = lazy(() => import('./BrainGraph'));
 import './Brain.css';
 
 export default function Brain() {
@@ -151,7 +152,7 @@ export default function Brain() {
         {answer && <div className="brain-answer" role="status">
           <p>{answer.answer}</p>
           {answer.sources.length > 0 && <div className="brain-citations"><strong>Sources</strong>
-            {answer.sources.map((source) => <div key={`${source.path}-${source.title}`}><span>{source.path} · {source.title}</span><blockquote>{source.evidence}</blockquote></div>)}
+            {answer.sources.map((source) => <div key={source.chunk_id ?? `${source.path}-${source.title}`}><span>{source.path} · {source.title}{source.chunk_index != null ? ` · passage ${source.chunk_index + 1}` : ''}</span><blockquote>{source.evidence}</blockquote></div>)}
           </div>}
         </div>}
         {health && <div className="brain-health" role="status">
@@ -167,7 +168,7 @@ export default function Brain() {
           <h2>Knowledge graph</h2>
           <span>{graph.sources.length} sources · {graph.topics.length} topics · {graph.edges.length} links</span>
         </div>
-        <BrainGraph graph={graph} selectedId={selected?.id} onSelect={openNode} />
+        <Suspense fallback={<p className="brain-graph-empty">Loading graph?</p>}><BrainGraph graph={graph} selectedId={selected?.id} onSelect={openNode} /></Suspense>
       </section>
 
       <div className="brain-body">

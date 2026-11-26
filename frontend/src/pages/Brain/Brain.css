@@ -102,3 +102,38 @@
   .brain-add-source summary { align-items: flex-start; flex-direction: column; }
   .brain-body { grid-template-columns: 1fr; gap: 28px; }
 }
+
+/* Vault graph: a navigable map of the stored source-topic relationships. */
+.brain-network { position: relative; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 18px; background: var(--color-surface-1); }
+.brain-network-toolbar { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
+.brain-network-toolbar > button, .brain-network-tools button { height: 36px; padding: 0 12px; border: 1px solid var(--border-subtle); border-radius: 9px; background: var(--color-surface-1); color: var(--text-secondary); font-size: 12px; }
+.brain-network-toolbar > button.is-on { color: var(--color-accent); border-color: var(--color-accent-border); background: var(--color-accent-soft); }
+.brain-network-toolbar button:hover { color: var(--text-primary); background: var(--color-surface-2); }
+.brain-network-search { display: flex; align-items: center; gap: 8px; width: min(290px, 48%); height: 36px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 9px; background: var(--color-surface-1); color: var(--text-tertiary); }
+.brain-network-search:focus-within { border-color: var(--color-accent); }
+.brain-network-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: 12px; }
+.brain-network-tools { display: flex; gap: 5px; margin-left: auto; }
+.brain-network-tools button { display: grid; place-items: center; width: 36px; padding: 0; }
+.brain-network-svg { display: block; width: 100%; height: min(60vh, 620px); min-height: 390px; touch-action: none; cursor: grab; }
+.brain-network-svg:active { cursor: grabbing; }
+.brain-network-backdrop { fill: transparent; }
+.brain-network-link { stroke: var(--border-strong); stroke-width: 1.35; opacity: .7; }
+.brain-network-link.is-highlighted { stroke: var(--color-accent); stroke-width: 2.4; opacity: 1; }
+.brain-network-node { cursor: pointer; outline: none; transition: opacity .2s ease; }
+.brain-network-node.is-dimmed { opacity: .24; }
+.brain-network-node circle { stroke: var(--color-surface-1); stroke-width: 3; }
+.brain-network-node.topic circle { fill: var(--color-accent); }
+.brain-network-node.source circle { fill: var(--text-secondary); }
+.brain-network-node.is-active circle, .brain-network-node:hover circle, .brain-network-node:focus-visible circle { stroke: var(--color-accent); stroke-width: 4; }
+.brain-network-node text { fill: var(--text-primary); font-size: 12px; font-weight: 550; paint-order: stroke; stroke: var(--color-surface-1); stroke-width: 4px; stroke-linejoin: round; }
+.brain-network-node.source text { fill: var(--text-secondary); font-size: 11px; font-weight: 400; }
+.brain-network-legend { position: absolute; right: 16px; bottom: 14px; left: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 15px; color: var(--text-tertiary); font-size: 11px; pointer-events: none; }
+.brain-network-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.brain-network-legend span:last-child { margin-left: auto; }
+.brain-network-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.brain-network-legend i.topic { background: var(--color-accent); }
+.brain-network-legend i.source { background: var(--text-secondary); }
+@media (max-width: 760px) { .brain-network-toolbar { top: 10px; left: 10px; right: 10px; } .brain-network-tools { gap: 2px; } .brain-network-tools button { width: 30px; } .brain-network-svg { height: 440px; min-height: 440px; } .brain-network-legend span:last-child { display: none; } }
+
+.brain-network-link.related { stroke-dasharray: 3 5; opacity: .45; }
+.brain-network-link.related.is-highlighted { opacity: .9; }
