@@ -60,3 +60,8 @@ memory-store/brain/
 .impeccable/review/
 .npm-cache/
 
+
+# Evaluation reports may contain private prompts and answers
+backend/evals/*report*.json
+backend/evals/*observed*.jsonl
+/eval-test-tmp/
