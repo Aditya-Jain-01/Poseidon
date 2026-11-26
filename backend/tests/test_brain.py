@@ -6,9 +6,42 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.brain.service import BrainService, BrainUnavailable, Topic, TopicAssignment, classify_source
+from app.brain.embeddings import BrainEmbedder, BrainEmbeddingUnavailable
 from app.config import settings
 from app.main import app
 from app.storage.migrations import apply_migrations
+
+
+class FakeEmbedder:
+    model_id = "fake:3"
+    dimension = 3
+
+    def encode(self, texts):
+        vectors = []
+        for text in texts:
+            lowered = text.casefold()
+            if any(word in lowered for word in ("spinach", "vegetable", "purchase")):
+                vectors.append([1.0, 0.0, 0.0])
+            elif "acme" in lowered:
+                vectors.append([0.0, 1.0, 0.0])
+            else:
+                vectors.append([0.0, 0.0, 1.0])
+        return vectors
+
+
+def test_brain_embedding_loader_never_substitutes_fake_vectors(monkeypatch):
+    from types import ModuleType
+    import sys
+
+    module = ModuleType("sentence_transformers")
+
+    def missing_model(*_args, **_kwargs):
+        raise OSError("not cached")
+
+    module.SentenceTransformer = missing_model
+    monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+    with pytest.raises(BrainEmbeddingUnavailable, match="not available locally"):
+        BrainEmbedder("missing-model", 3).encode(["question"])
 
 
 @pytest.mark.asyncio
@@ -29,7 +62,7 @@ async def test_brain_ingest_is_source_backed_and_idempotent(tmp_path, monkeypatc
             Topic(title="Product", summary="Product will review the request Friday.", evidence="Product will review it Friday."),
         ])
 
-    brain = BrainService(vault, db, classify)
+    brain = BrainService(vault, db, classify, FakeEmbedder())
     brain.ensure_vault()
     original = source.read_bytes()
     first = await brain.sync("local_owner")
@@ -50,7 +83,7 @@ async def test_brain_ingest_is_source_backed_and_idempotent(tmp_path, monkeypatc
 
     async def complete(**_kwargs):
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
-            content='{"answer":"Acme requested a weekly export.","citations":[1]}'))])
+            content='{"answer":"Acme requested a weekly export.","citations":[1],"abstained":false}'))])
 
     from app.brain import service as module
     monkeypatch.setattr(module, "_brain_model", lambda: (
@@ -69,13 +102,108 @@ async def test_brain_ingest_is_source_backed_and_idempotent(tmp_path, monkeypatc
     assert len(calls) == 1
 
     source.write_text("Acme requested a weekly export. Product will review it Friday.\n", encoding="utf-8")
-    assert (await brain.query("local_owner", "What did Acme request?"))["sources"] == []
     assert {issue["kind"] for issue in (await brain.lint("local_owner"))["issues"]} == {"changed_source"}
-    third = await brain.sync("local_owner")
-    assert third["processed"] == ["raw/meeting.md"]
+    assert (await brain.query("local_owner", "What did Acme request?"))["sources"][0]["path"] == "raw/meeting.md"
     assert len(calls) == 2
     assert len(brain.get_node("local_owner", acme["id"])["sources"]) == 1
     assert (await brain.lint("local_owner"))["issues"] == []
+
+
+@pytest.mark.asyncio
+async def test_brain_retrieves_raw_passage_outside_topic_summary(tmp_path, monkeypatch):
+    vault = tmp_path / "Brain"
+    raw = vault / "raw"
+    raw.mkdir(parents=True)
+    (raw / "plan.md").write_text(
+        "# Weekly plan\n\nMonday is for planning.\n" + "Planning details. " * 90 +
+        "Buy spinach and lentils on Wednesday.", encoding="utf-8")
+    db = tmp_path / "brain.db"
+    apply_migrations(db)
+
+    async def classify(_text, _titles):
+        return TopicAssignment(nodes=[Topic(
+            title="Planning", summary="Monday is for planning.", evidence="Monday is for planning.")])
+
+    brain = BrainService(vault, db, classify, FakeEmbedder())
+    await brain.sync("local_owner")
+    from app.storage.connection import connection
+    with connection(db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM brain_chunks").fetchone()[0] > 1
+    prompts = []
+
+    async def complete(**kwargs):
+        prompts.append(kwargs["messages"][1]["content"])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content='{"answer":"Buy spinach and lentils on Wednesday.","citations":[1],"abstained":false}'))])
+
+    from app.brain import service as module
+    monkeypatch.setattr(module, "_brain_model", lambda: (
+        SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=complete))), "test-model"))
+    result = await brain.query("local_owner", "When should I buy spinach?")
+    assert "Buy spinach and lentils" in prompts[0]
+    assert result["sources"][0]["path"] == "raw/plan.md"
+    assert result["sources"][0]["title"] == "Weekly plan"
+    paraphrase = await brain.query("local_owner", "Which vegetables should I purchase?")
+    assert paraphrase["sources"][0]["path"] == "raw/plan.md"
+
+
+@pytest.mark.asyncio
+async def test_brain_removes_deleted_source_and_backfills_existing_chunks(tmp_path):
+    vault = tmp_path / "Brain"
+    raw = vault / "raw"
+    raw.mkdir(parents=True)
+    source = raw / "plan.md"
+    source.write_text("Buy spinach on Wednesday.", encoding="utf-8")
+    db = tmp_path / "brain.db"
+    apply_migrations(db)
+
+    async def classify(_text, _titles):
+        return TopicAssignment(nodes=[Topic(title="Groceries", summary="Buy spinach on Wednesday.",
+                                            evidence="Buy spinach on Wednesday.")])
+
+    brain = BrainService(vault, db, classify, FakeEmbedder())
+    await brain.sync("local_owner")
+    from app.storage.connection import connection
+    with connection(db) as conn:
+        conn.execute("DELETE FROM brain_chunks")
+        conn.commit()
+    assert (await brain.sync("local_owner"))["unchanged"] == ["raw/plan.md"]
+    with connection(db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM brain_chunks").fetchone()[0] == 1
+
+    source.unlink()
+    assert (await brain.query("local_owner", "spinach"))["sources"] == []
+    assert brain.graph("local_owner") == {"sources": [], "topics": [], "edges": []}
+    assert brain.list_nodes("local_owner") == []
+
+
+@pytest.mark.asyncio
+async def test_brain_reembeds_when_configured_model_changes(tmp_path):
+    vault = tmp_path / "Brain"
+    raw = vault / "raw"
+    raw.mkdir(parents=True)
+    (raw / "plan.md").write_text("Buy spinach on Wednesday.", encoding="utf-8")
+    db = tmp_path / "brain.db"
+    apply_migrations(db)
+    classifications = []
+
+    async def classify(_text, _titles):
+        classifications.append(1)
+        return TopicAssignment(nodes=[Topic(title="Groceries", summary="Buy spinach on Wednesday.",
+                                            evidence="Buy spinach on Wednesday.")])
+
+    first = BrainService(vault, db, classify, FakeEmbedder())
+    await first.sync("local_owner")
+
+    class NewModel(FakeEmbedder):
+        model_id = "new-model:3"
+
+    second = BrainService(vault, db, classify, NewModel())
+    assert (await second.sync("local_owner"))["unchanged"] == ["raw/plan.md"]
+    assert len(classifications) == 1
+    from app.storage.connection import connection
+    with connection(db) as conn:
+        assert conn.execute("SELECT DISTINCT model_id FROM brain_chunk_embeddings").fetchone()[0] == "new-model:3"
 
 
 @pytest.mark.asyncio
@@ -89,7 +217,7 @@ async def test_brain_rejects_unsupported_evidence_without_writing(tmp_path):
     async def classify(_text, _titles):
         return TopicAssignment(nodes=[Topic(title="Launch", summary="The launch is Friday.", evidence="The launch is Monday.")])
 
-    brain = BrainService(vault, db, classify)
+    brain = BrainService(vault, db, classify, FakeEmbedder())
     result = await brain.sync("local_owner")
     assert result["processed"] == []
     assert "absent from the source" in result["failed"][0]["error"]
@@ -107,7 +235,7 @@ async def test_pasted_source_is_saved_and_filed(tmp_path):
             title="Roadmap", summary="The roadmap prioritizes retrieval.",
             evidence="The roadmap prioritizes retrieval.")])
 
-    brain = BrainService(vault, db, classify)
+    brain = BrainService(vault, db, classify, FakeEmbedder())
     result = await brain.add_source("local_owner", "Team update", "The roadmap prioritizes retrieval.", source_key="telegram:123")
     assert result["path"].startswith("raw/team-update-")
     assert result["scan"]["processed"] == [result["path"]]

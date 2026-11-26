@@ -103,6 +103,18 @@ MIGRATIONS = ((1, MEMORY_SQL), (2, RUNTIME_SQL), (3, PERSONAL_DATA_SQL), (4, TEL
                   "CREATE TABLE brain_entries (node_id TEXT NOT NULL REFERENCES brain_nodes(id), source_id TEXT NOT NULL REFERENCES brain_sources(id) ON DELETE CASCADE, summary TEXT NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(node_id,source_id))",
                   "CREATE INDEX idx_brain_sources_owner ON brain_sources(owner_id,path)",
                   "CREATE INDEX idx_brain_nodes_owner ON brain_nodes(owner_id,title)",
+              )),
+              (8, (
+                  "CREATE TABLE brain_chunks (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL REFERENCES brain_sources(id) ON DELETE CASCADE, chunk_index INTEGER NOT NULL, content TEXT NOT NULL, UNIQUE(source_id,chunk_index))",
+                  "CREATE INDEX idx_brain_chunks_source ON brain_chunks(source_id,chunk_index)",
+                  "CREATE VIRTUAL TABLE brain_chunks_fts USING fts5(content, tokenize='unicode61')",
+                  "CREATE TRIGGER trg_brain_chunks_insert AFTER INSERT ON brain_chunks BEGIN INSERT INTO brain_chunks_fts(rowid,content) VALUES (new.id,new.content); END",
+                  "CREATE TRIGGER trg_brain_chunks_delete AFTER DELETE ON brain_chunks BEGIN DELETE FROM brain_chunks_fts WHERE rowid=old.id; END",
+                  "CREATE TRIGGER trg_brain_chunks_update AFTER UPDATE ON brain_chunks BEGIN DELETE FROM brain_chunks_fts WHERE rowid=old.id; INSERT INTO brain_chunks_fts(rowid,content) VALUES (new.id,new.content); END",
+              )),
+              (9, (
+                  "CREATE TABLE brain_chunk_embeddings (chunk_id INTEGER PRIMARY KEY REFERENCES brain_chunks(id) ON DELETE CASCADE, model_id TEXT NOT NULL, dimension INTEGER NOT NULL, vector BLOB NOT NULL)",
+                  "CREATE INDEX idx_brain_chunk_embeddings_model ON brain_chunk_embeddings(model_id)",
               )))
 
 
