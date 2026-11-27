@@ -29,7 +29,7 @@ except ImportError:
 from app.config import settings
 from app.storage.connection import connection
 from app.storage.migrations import apply_migrations
-from app.memory.embeddings import embedding_service
+from app.embeddings import embedding_service
 
 
 class EpisodicStore:

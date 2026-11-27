@@ -46,7 +46,7 @@ def pytest_sessionfinish(session, exitstatus):
 def isolated_stores(tmp_path, monkeypatch):
     from app.config import settings
     from app.storage.migrations import apply_migrations
-    from app.memory.embeddings import embedding_service
+    from app.embeddings import embedding_service
     from app.memory.memory_engine import memory_engine, session_store
     from app.memory.semantic_store import semantic_store
     from app.memory.episodic_store import episodic_store
@@ -69,7 +69,7 @@ def isolated_stores(tmp_path, monkeypatch):
     monkeypatch.setattr(episodic_store, 'db_path', db)
     monkeypatch.setattr(procedural_store, 'skills_dir', tmp_path / 'skills')
     procedural_store.reload()
-    monkeypatch.setattr(embedding_service, '_model', False)
+    monkeypatch.setattr(embedding_service, 'encode', lambda texts: [[1.0] + [0.0] * (embedding_service.dimension - 1) for _ in texts])
     monkeypatch.setattr(llm_provider, '_config_path', tmp_path / 'llm_config.json')
     monkeypatch.setattr(llm_provider, '_clients', {})
     monkeypatch.setattr(llm_provider, '_providers', {k: dict(v) for k, v in DEFAULT_PROVIDERS.items()})

@@ -7,7 +7,7 @@ import re
 import struct
 from pathlib import Path
 
-from app.brain.embeddings import BrainEmbedder
+from app.embeddings import LocalEmbedder
 from app.storage.connection import connection
 
 CHUNK_CHARS = 700
@@ -42,7 +42,7 @@ def chunk_text(text: str) -> list[str]:
     return chunks
 
 
-def replace_source_chunks(conn, source_id: str, chunks: list[str], vectors: list[list[float]], embedder: BrainEmbedder) -> None:
+def replace_source_chunks(conn, source_id: str, chunks: list[str], vectors: list[list[float]], embedder: LocalEmbedder) -> None:
     if len(chunks) != len(vectors):
         raise ValueError("Every Brain passage needs an embedding")
     conn.execute("DELETE FROM brain_chunks WHERE source_id=?", (source_id,))
@@ -63,7 +63,7 @@ def replace_source_chunks(conn, source_id: str, chunks: list[str], vectors: list
         )
 
 
-def search_passages(db_path: Path, vault: Path, owner_id: str, question: str, embedder: BrainEmbedder) -> list[dict]:
+def search_passages(db_path: Path, vault: Path, owner_id: str, question: str, embedder: LocalEmbedder) -> list[dict]:
     """Fuse local embedding similarity and FTS5 ranks over fresh passages."""
     with connection(db_path) as conn:
         indexed = conn.execute(

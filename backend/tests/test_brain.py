@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.brain.service import BrainService, BrainUnavailable, Topic, TopicAssignment, classify_source
-from app.brain.embeddings import BrainEmbedder, BrainEmbeddingUnavailable
+from app.embeddings import LocalEmbedder, EmbeddingUnavailable
 from app.config import settings
 from app.main import app
 from app.storage.migrations import apply_migrations
@@ -40,8 +40,8 @@ def test_brain_embedding_loader_never_substitutes_fake_vectors(monkeypatch):
 
     module.SentenceTransformer = missing_model
     monkeypatch.setitem(sys.modules, "sentence_transformers", module)
-    with pytest.raises(BrainEmbeddingUnavailable, match="not available locally"):
-        BrainEmbedder("missing-model", 3).encode(["question"])
+    with pytest.raises(EmbeddingUnavailable, match="not available locally"):
+        LocalEmbedder("missing-model", 3).encode(["question"])
 
 
 @pytest.mark.asyncio

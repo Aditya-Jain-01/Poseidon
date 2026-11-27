@@ -16,7 +16,7 @@ from app.agents.providers import llm_provider
 from app.config import settings
 from app.storage.connection import connection
 from app.security.secrets import redact
-from app.brain.embeddings import BrainEmbedder, BrainEmbeddingUnavailable, brain_embedder
+from app.embeddings import LocalEmbedder, EmbeddingUnavailable, embedding_service
 from app.brain.retrieval import chunk_text, replace_source_chunks, search_passages
 
 MAX_SOURCE_BYTES = 128 * 1024
@@ -111,11 +111,11 @@ class BrainService:
 
     def __init__(self, vault: Path, db_path: Path,
                  classifier: Callable[[str, list[str]], Awaitable[TopicAssignment]] = classify_source,
-                 embedder: BrainEmbedder | None = None):
+                 embedder: LocalEmbedder | None = None):
         self.vault = Path(vault)
         self.db_path = Path(db_path)
         self.classifier = classifier
-        self.embedder = embedder or brain_embedder
+        self.embedder = embedder or embedding_service
 
     def ensure_vault(self) -> None:
         """Create the local vault skeleton without touching existing notes."""
@@ -221,7 +221,7 @@ class BrainService:
         await self._refresh_if_needed(owner_id)
         try:
             matches = search_passages(self.db_path, self.vault, owner_id, question, self.embedder)
-        except BrainEmbeddingUnavailable as exc:
+        except EmbeddingUnavailable as exc:
             raise BrainUnavailable(str(exc)) from exc
         if not matches:
             self._log("query", "No matching evidence")
