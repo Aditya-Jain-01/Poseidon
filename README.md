@@ -47,7 +47,7 @@ Brain is a separate, source-backed knowledge view. It scans `.md` and `.txt` fil
 
 ## Run locally
 
-Requirements: Python 3.11+, Node.js 20.19+ (20.x) or 22.12+, and npm. The examples below use PowerShell from the repository root.
+Requirements: Python 3.11+, Node.js 20.19+ (20.x) or 22.12+, npm, and internet access for initial setup. From PowerShell in the repository root, run `powershell -ExecutionPolicy Bypass -File .\setup.ps1` once. It installs Python and frontend dependencies, downloads the shared embedding model, checks it works offline, and creates `.env` if missing. Subsequent starts use the saved model without internet. The script reuses an existing `.venv` or `venv` environment and leaves an existing `.env` untouched.
 
 1. Copy the example environment file and configure a model:
 
@@ -63,13 +63,10 @@ Requirements: Python 3.11+, Node.js 20.19+ (20.x) or 22.12+, and npm. The exampl
    POSEIDON_API_KEY=ollama
    ```
 
-2. Start the backend:
+2. Start the backend using the environment reported by setup (`.venv` in this example):
 
    ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   python -m pip install -r requirements.txt
-   python -m uvicorn app.main:app --app-dir backend --env-file .env --reload --host 127.0.0.1 --port 8000
+   .\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --env-file .env --reload --host 127.0.0.1 --port 8000
    ```
 
    Check `http://127.0.0.1:8000/health`. FastAPI documentation is at `http://127.0.0.1:8000/docs`.
@@ -78,7 +75,6 @@ Requirements: Python 3.11+, Node.js 20.19+ (20.x) or 22.12+, and npm. The exampl
 
    ```powershell
    Set-Location frontend
-   npm ci
    npm run dev
    ```
 
@@ -94,7 +90,7 @@ The Brain view also accepts pasted sources, answers questions from matching evid
 
 Brain answers use retrieval-augmented generation: a local passage index finds relevant text, then the configured answer model receives those passages. Ask a question to refresh changed raw notes automatically; use **Scan raw sources** to update the graph without asking a question. Existing vaults get embeddings on the first scan or query after upgrading.
 
-The default embedding model is `all-MiniLM-L6-v2` (384 dimensions). Run `venv\Scripts\python.exe backend/scripts/prepare_brain_embeddings.py` to verify it is cached and works offline. On a fresh machine, run the same command with `--download` **once while online**, then use the offline check. Brain never silently substitutes fake vectors. Embedding inference stays local; the answer model follows the separate `POSEIDON_BRAIN_ALLOW_REMOTE_MODEL` setting. Changing `POSEIDON_EMBEDDING_MODEL` or `POSEIDON_EMBEDDING_DIM` rebuilds passage vectors on the next scan.
+The default embedding model is `all-MiniLM-L6-v2` (384 dimensions). `setup.ps1` downloads and checks it during initial setup. Brain and episodic memory share one embedding implementation and one model instance per backend process. Normal use loads local files only and reports missing models; it never substitutes fake vectors. Facts continue to use SQLite FTS5 with BM25 ranking. Embedding inference stays local; the answer model follows the separate `POSEIDON_BRAIN_ALLOW_REMOTE_MODEL` setting. Changing `POSEIDON_EMBEDDING_MODEL` or `POSEIDON_EMBEDDING_DIM` rebuilds passage vectors on the next scan.
 
 ### Telegram
 
